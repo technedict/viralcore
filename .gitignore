@@ -1,0 +1,98 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Database backups
+*.db.backup_*
+*.sqlite3.backup_*
+
+# Log files (keep main logs but exclude temporary ones)
+*.log.*
+*.log.1
+*.log.2
+*.log.3
+*.log.4
+*.log.5
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+
+# Environment files
+.env.local
+.env.development
+.env.test
+.env.production
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+
+# Test artifacts
+.pytest_cache/
+.tox/
+.coverage
+nosetests.xml
+coverage.xml
+*.cover
+
+# Documentation builds
+_build/
+docs/_build/
+
+# CSV exports (keep templates but exclude generated ones)
+*_export_*.csv
+serviceid_mismatches.csv
+template_issues.html
+
+# Sensitive config files
+settings/provider_config.json.backup
+*.key
+*.pem
+*.crt
