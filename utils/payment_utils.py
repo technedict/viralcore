@@ -553,7 +553,7 @@ def initiate_flutterwave_transfer(
     """
     url = "https://api.flutterwave.com/v3/transfers"
     flutterwave_secret_key = APIConfig.FLUTTERWAVE_API_KEY
-    reference = f"{beneficiary_name.replace(" ", "-")}_{str(uuid.uuid4())}"
+    reference = f"{beneficiary_name.replace(' ', '-')}_{str(uuid.uuid4())}"
 
     headers = {
         "accept": "application/json",
@@ -585,6 +585,55 @@ def initiate_flutterwave_transfer(
         payload["destination_branch_code"] = destination_branch_code
 
     try:
+        # Try to use new structured API client if available
+        try:
+            from utils.api_client import get_flutterwave_client, create_admin_error_message
+            
+            # Use structured API client
+            client = get_flutterwave_client()
+            
+            result = client.initiate_transfer(
+                amount=amount,
+                beneficiary_name=beneficiary_name,
+                account_number=account_number,
+                account_bank=bank_code,
+                reference=reference,
+                narration=narration,
+                currency=currency,
+                debit_currency=debit_currency
+            )
+            
+            # Log the result for admin diagnostics
+            if result['success']:
+                logger.info(f"Flutterwave transfer initiated successfully: {result['trace_id']}")
+                return {
+                    "status": "success",
+                    "id": result['data'].get('id'),
+                    "is_approved": result['data'].get('is_approved'),
+                    "status_detail": result['data'].get('status'),
+                    "created_at": result['data'].get('created_at'),
+                    "amount": result['data'].get('amount'),
+                    "fee": result['data'].get('fee'),
+                    "reference": result['data'].get('reference'),
+                    "trace_id": result['trace_id']
+                }
+            else:
+                admin_error = create_admin_error_message(
+                    error=result.get('error', 'Unknown error'),
+                    operation="Flutterwave transfer"
+                )
+                logger.error(f"Flutterwave transfer failed: {admin_error}")
+                return {
+                    "status": "error",
+                    "message": result.get('error', 'Unknown error'),
+                    "trace_id": result.get('trace_id')
+                }
+                
+        except ImportError:
+            # Fall through to original implementation
+            pass
+        
+        # Original implementation as fallback
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         response_data = response.json()

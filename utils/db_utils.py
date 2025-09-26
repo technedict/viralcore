@@ -267,51 +267,98 @@ def get_affiliate_balance(user_id: int) -> float:
         return row['affiliate_balance'] if row else 0.0
 
 def update_affiliate_balance(user_id: int, bonus: float) -> None:
-    """Add a bonus amount to a user's affiliate balance."""
-    with get_connection(DB_FILE) as conn:
-        c = conn.cursor()
-        c.execute(
-            """
-            UPDATE users
-               SET affiliate_balance = affiliate_balance + ?
-             WHERE id = ?
-            """,
-            (bonus, user_id)
+    """Add a bonus amount to a user's affiliate balance using atomic operations."""
+    try:
+        from utils.balance_operations import atomic_balance_update
+        
+        success = atomic_balance_update(
+            user_id=user_id,
+            balance_type="affiliate",
+            amount=bonus,
+            operation_type="bonus",
+            reason="Affiliate balance bonus via update_affiliate_balance"
         )
-        conn.commit()
-    print(f"Affiliate balance for user {user_id} updated by {bonus}.")
+        
+        if success:
+            print(f"Affiliate balance for user {user_id} updated by {bonus}.")
+        else:
+            print(f"Failed to update affiliate balance for user {user_id} by {bonus}.")
+            
+    except ImportError:
+        # Fallback to original implementation
+        print("Warning: Using non-atomic balance operation (balance_operations module not available)")
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute(
+                """
+                UPDATE users
+                   SET affiliate_balance = affiliate_balance + ?
+                 WHERE id = ?
+                """,
+                (bonus, user_id)
+            )
+            conn.commit()
+        print(f"Affiliate balance for user {user_id} updated by {bonus}.")
 
 def decrement_affiliate_balance(user_id: int, amount_to_remove: float) -> bool:
     """
-    Decrements a user's affiliate balance.
+    Decrements a user's affiliate balance using atomic operations.
     Returns True if successful, False otherwise (e.g., insufficient funds).
     """
     if amount_to_remove <= 0:
         print("Amount to remove must be a positive value.")
         return False
 
-    current_balance = get_affiliate_balance(user_id)
-
-    if amount_to_remove > current_balance:
-        print(f"Cannot remove {amount_to_remove:.2f}. User {user_id} only has {current_balance:.2f} in affiliate balance.")
-        return False
-
-    new_balance = current_balance - amount_to_remove
-
-    with get_connection(DB_FILE) as conn:
-        c = conn.cursor()
-        try:
-            c.execute(
-                "UPDATE users SET affiliate_balance = ? WHERE id = ?",
-                (new_balance, user_id)
-            )
-            conn.commit()
-            print(f"Successfully removed {amount_to_remove:.2f} from user {user_id}'s affiliate balance. New balance: {new_balance:.2f}")
-            return True
-        except sqlite3.Error as e:
-            print(f"Database error while decrementing balance for user {user_id}: {e}")
-            conn.rollback()
+    # Use atomic withdrawal operation for safety
+    try:
+        from utils.balance_operations import atomic_withdraw_operation, validate_withdrawal_request
+        
+        # Validate the withdrawal first
+        is_valid, error_msg = validate_withdrawal_request(user_id, "affiliate", amount_to_remove)
+        if not is_valid:
+            print(f"Validation failed: {error_msg}")
             return False
+        
+        # Perform atomic withdrawal
+        success = atomic_withdraw_operation(
+            user_id=user_id,
+            balance_type="affiliate",
+            amount=amount_to_remove,
+            reason="Balance decrement via decrement_affiliate_balance"
+        )
+        
+        if success:
+            print(f"Successfully removed {amount_to_remove:.2f} from user {user_id}'s affiliate balance.")
+        else:
+            print(f"Failed to remove {amount_to_remove:.2f} from user {user_id}'s affiliate balance.")
+        
+        return success
+        
+    except ImportError:
+        # Fallback to original implementation if balance_operations not available
+        print("Warning: Using non-atomic balance operation (balance_operations module not available)")
+        current_balance = get_affiliate_balance(user_id)
+
+        if amount_to_remove > current_balance:
+            print(f"Cannot remove {amount_to_remove:.2f}. User {user_id} only has {current_balance:.2f} in affiliate balance.")
+            return False
+
+        new_balance = current_balance - amount_to_remove
+
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            try:
+                c.execute(
+                    "UPDATE users SET affiliate_balance = ? WHERE id = ?",
+                    (new_balance, user_id)
+                )
+                conn.commit()
+                print(f"Successfully removed {amount_to_remove:.2f} from user {user_id}'s affiliate balance. New balance: {new_balance:.2f}")
+                return True
+            except sqlite3.Error as e:
+                print(f"Database error while decrementing balance for user {user_id}: {e}")
+                conn.rollback()
+                return False
 
 def get_user_metrics(user_id: int) -> Tuple[int, int, float]:
     """
