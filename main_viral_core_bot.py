@@ -175,10 +175,13 @@ def main():
     
     shutdown_manager.register_cleanup_callback(startup_recovery)
     
+    # Run startup recovery before starting the bot
     try:
-        # Run startup recovery
-        asyncio.create_task(startup_recovery())
-        
+        asyncio.run(startup_recovery())
+    except Exception as e:
+        logger.error(f"Error during startup recovery: {e}")
+    
+    try:
         # Start the bot
         app.run_polling()
     except KeyboardInterrupt:
