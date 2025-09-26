@@ -4,6 +4,7 @@
 import os
 import asyncio
 import logging
+from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -187,86 +188,57 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         logger.info(f"Admin {query.from_user.id} initiated broadcast.")
 
-    elif data == "admin_view_users":
+    elif data == "admin_view_users" or data.startswith("admin_users_page_"):
+        # Handle pagination
+        page = 1
+        if data.startswith("admin_users_page_"):
+            try:
+                page = int(data.split("_")[-1])
+            except (ValueError, IndexError):
+                page = 1
+        
         users = get_all_users()
-        if users:
-            users = sorted(users, key=lambda u: u[1].lower() if u[1] else "") # Handle potential None username
-            header = "<b>All Users:</b>\n\n"
-            # Adjusted column widths for better fit
-            table_header = "<pre>   ID   |  Username  | Admin | Aff.Bal | X Posts| TG Posts</pre>\n"
-            table_divider = "<pre>--------|------------|-------|---------|--------|---------</pre>\n"
-            rows = []
-            for u in users:
-                user_id = u[0]
-                username_raw = u[1] if u[1] else "N/A" # Use "N/A" for missing usernames
-                username_display = username_raw.title()
-                is_admin = "Yes" if u[4] else "No"
-                total_x_posts, total_tg_posts, affiliate_balance = get_user_metrics(user_id) # Ensure this returns valid numbers
-                affi_balance_str = f"${affiliate_balance:.2f}" if affiliate_balance is not None else "$0.00"
-                total_x_posts_str = str(total_x_posts) if total_x_posts is not None else "0"
-                total_tg_posts_str = str(total_tg_posts) if total_tg_posts is not None else "0"
-
-                # Truncate username if too long to fit in 10 chars
-                username_formatted = (username_display[:9] + '…') if len(username_display) > 10 else username_display
-                row = f"<pre>{user_id:<6} | {username_formatted:<10} | {is_admin:<5} | {affi_balance_str:<7} | {total_x_posts_str:<5} | {total_tg_posts_str:<5}</pre>\n"
-                rows.append(row)
-            text = header + table_header + table_divider + "".join(rows)
-        else:
-            text = "No users found."
-        keyboard = [[InlineKeyboardButton("↩️ Back", callback_data="admin_users_menu")]] # Back to users menu
-        await clear_bot_messages(update, context)
-        msg = await query.message.reply_text(
-            text=text,
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        
+        # Use pagination utility
+        from utils.admin_pagination import admin_paginator, safe_send_message_or_file, AdminExporter
+        
+        message_text, keyboard = admin_paginator.paginate_users(users, page)
+        
+        # Send with automatic fallback to CSV if too long
+        await safe_send_message_or_file(
+            update=update,
+            context=context,
+            text=message_text,
+            keyboard=keyboard,
+            file_generator_func=AdminExporter.export_users_to_csv,
+            filename_prefix="users_export"
         )
-        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
-    elif data == "admin_view_payments":
+    elif data == "admin_view_payments" or data.startswith("admin_payments_page_"):
+        # Handle pagination
+        page = 1
+        if data.startswith("admin_payments_page_"):
+            try:
+                page = int(data.split("_")[-1])
+            except (ValueError, IndexError):
+                page = 1
+        
         payments = get_all_payments()
-        if payments:
-            header = "<b>All Payments:</b>\n\n"
-            # Payment ID (6), User ID (6), TG Handle (10), X Username (10), Tier (4), B.Posts (6), R.Posts (6), Cost (7)
-            table_header = "<pre>PayID | UserID | TG Handle | X User | Tier |B.Psts|R.Psts| Cost | Date |</pre>\n"
-            table_divider ="<pre>------|--------|-----------|--------|------|------|------|--------|------</pre>\n"
-            rows = []
-            payment_display_data = [] # To store (username.lower(), row) for sorting
-            for p in payments:
-                payment_id = p[0]
-                user_id = p[1]
-                x_username = p[8] if p[8] else "N/A"
-                tier = p[2] if p[2] else "N/A"
-                bpost = p[9] if p[9] is not None else 0
-                rpost = p[10] if p[10] is not None else 0
-                total_cost = p[4] if p[4] is not None else 0.00
-                date = p[7] if p[7] else "N/A"
-                tg_reactions = p[3] if tier == "tgt" else "Not TG Tier"
-
-                user_record = get_user(user_id)
-                username_tg = user_record[1] if user_record and user_record[1] else "N/A"
-                username_tg_display = (username_tg.title()[:9] + '…') if len(username_tg) > 9 else username_tg.title()
-
-                x_username_display = (x_username[:7] + '…') if len(x_username) > 7 else x_username
-                tier_display = (tier[:3] + '…') if len(tier) > 3 else tier
-
-                row = (
-                    f"<pre> {payment_id:<3} | {user_id:<6} | {username_tg_display:<9} | {x_username_display:<6} | {tier_display:<3} | {bpost:<3} | {rpost:<3} | ${total_cost:<5.2f} | {date:<6}</pre>\n"
-                )
-                payment_display_data.append((username_tg.lower(), row)) # Store for sorting
-
-            # Sort rows by the lowercase TG username
-            sorted_rows = [r for _, r in sorted(payment_display_data, key=lambda x: x[0])]
-            text = header + table_header + table_divider + "".join(sorted_rows)
-        else:
-            text = "No payments found."
-        keyboard = [[InlineKeyboardButton("↩️ Back", callback_data="admin_payments_menu")]] # Back to payments menu
-        await clear_bot_messages(update, context)
-        msg = await query.message.reply_text(
-            text=text,
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        
+        # Use pagination utility
+        from utils.admin_pagination import admin_paginator, safe_send_message_or_file, AdminExporter
+        
+        message_text, keyboard = admin_paginator.paginate_payments(payments, page)
+        
+        # Send with automatic fallback to CSV if too long
+        await safe_send_message_or_file(
+            update=update,
+            context=context,
+            text=message_text,
+            keyboard=keyboard,
+            file_generator_func=AdminExporter.export_payments_to_csv,
+            filename_prefix="payments_export"
         )
-        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
     elif data == "admin_view_boost_balance":
         balance_info = await get_boost_service_balance()
@@ -329,10 +301,67 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
-    elif data.startswith("admin_set_service_"):
-        provider_name = data.split("admin_set_service_")[1]
-        await switch_boost_provider(update, context, provider_name)
-        logger.info(f"Admin {query.from_user.id} attempted to switch boost provider to {provider_name}.")
+    elif data == "admin_export_users":
+        try:
+            from utils.admin_pagination import AdminExporter
+            
+            # Generate CSV file
+            csv_path = AdminExporter.export_users_to_csv()
+            
+            # Send as document
+            with open(csv_path, 'rb') as csv_file:
+                await query.message.reply_document(
+                    document=csv_file,
+                    filename=f"users_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    caption="📊 Complete users export with all data fields",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("↩️ Back to Users", callback_data="admin_view_users")
+                    ]])
+                )
+            
+            # Clean up temporary file
+            os.unlink(csv_path)
+            logger.info(f"Admin {query.from_user.id} exported users to CSV")
+            
+        except Exception as e:
+            logger.error(f"Failed to export users: {e}")
+            await query.message.reply_text(
+                "❌ Failed to export users. Please try again later.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("↩️ Back to Users", callback_data="admin_view_users")
+                ]])
+            )
+
+    elif data == "admin_export_payments":
+        try:
+            from utils.admin_pagination import AdminExporter
+            
+            # Generate CSV file
+            csv_path = AdminExporter.export_payments_to_csv()
+            
+            # Send as document
+            with open(csv_path, 'rb') as csv_file:
+                await query.message.reply_document(
+                    document=csv_file,
+                    filename=f"payments_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    caption="💳 Complete payments export with all transaction details",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("↩️ Back to Payments", callback_data="admin_view_payments")
+                    ]])
+                )
+            
+            # Clean up temporary file
+            os.unlink(csv_path)
+            logger.info(f"Admin {query.from_user.id} exported payments to CSV")
+            
+        except Exception as e:
+            logger.error(f"Failed to export payments: {e}")
+            await query.message.reply_text(
+                "❌ Failed to export payments. Please try again later.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("↩️ Back to Payments", callback_data="admin_view_payments")
+                ]])
+            )
 
 
     # --- Prompts for actions requiring user input ---
@@ -436,6 +465,11 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             "admin_users_menu" # Back to users menu
         )
         logger.info(f"Admin {query.from_user.id} initiated 'delete user'.")
+
+    elif data.startswith("admin_set_service_"):
+        provider_name = data.split("admin_set_service_")[1]
+        await switch_boost_provider(update, context, provider_name)
+        logger.info(f"Admin {query.from_user.id} attempted to switch boost provider to {provider_name}.")
 
 
 async def switch_boost_provider(update: Update, context: ContextTypes.DEFAULT_TYPE, provider_name: str):

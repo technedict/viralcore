@@ -2,6 +2,7 @@
 # main_bot.py
 
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -23,6 +24,7 @@ from utils.db_utils import (
     init_custom_db,
     init_tg_db
 )
+from utils.graceful_shutdown import shutdown_manager
 from handlers.start_handler import start
 from handlers.link_submission_handlers import submitlink, handle_twitter_link, x_account_selection_handler, tg_account_selection_handler, handle_tg_link, handle_awaiting_x_poll_details
 from handlers.raid_balance_handlers import raid, stop_raid, balance, addposts
@@ -67,6 +69,10 @@ def main():
     init_tg_db()
     init_groups_db()
     init_custom_db()
+    
+    # Initialize shutdown manager and setup signal handlers
+    shutdown_manager.setup_signal_handlers()
+    shutdown_manager.init_job_queue()
 
     # Build the application
     app = ApplicationBuilder().token(APIConfig.TELEGRAM_BOT_TOKEN).build()
@@ -158,7 +164,29 @@ def main():
     ))
 
     logger.info("Bot is up and running!")
-    app.run_polling()
+    
+    # Register cleanup callback for recovery on startup
+    async def startup_recovery():
+        logger.info("Performing startup recovery...")
+        recovered_jobs = await shutdown_manager.recover_stale_jobs(threshold_minutes=30)
+        if recovered_jobs > 0:
+            logger.info(f"Recovered {recovered_jobs} stale jobs on startup")
+    
+    shutdown_manager.register_cleanup_callback(startup_recovery)
+    
+    try:
+        # Run startup recovery
+        asyncio.create_task(startup_recovery())
+        
+        # Start the bot
+        app.run_polling()
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt, shutting down...")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+    finally:
+        # Perform graceful shutdown
+        asyncio.run(shutdown_manager.graceful_shutdown())
 
 if __name__ == "__main__":
     main()
