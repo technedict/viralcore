@@ -16,11 +16,11 @@ def test_escape_markdown_v2():
     """Test MarkdownV2 escaping functionality."""
     print("Testing MarkdownV2 escaping...")
     
-    # Test basic special characters
+    # Test basic special characters (according to official Telegram MarkdownV2 spec)
     test_cases = [
         ("Hello_world!", "Hello\\_world\\!"),
-        ("Price: $100.50", "Price: \\$100\\.50"),
-        ("User@domain.com", "User\\@domain\\.com"),
+        ("Price: $100.50", "Price: $100\\.50"),  # $ is NOT special in MarkdownV2
+        ("User@domain.com", "User@domain\\.com"),  # @ is NOT special in MarkdownV2  
         ("Test [link](url)", "Test \\[link\\]\\(url\\)"),
         ("Hash #tag", "Hash \\#tag"),
         ("Code `block`", "Code \\`block\\`"),
@@ -51,10 +51,10 @@ def test_render_markdown_v2():
     assert rendered == expected, f"Expected {expected}, got {rendered}"
     print(f"✓ Basic template: '{rendered}'")
     
-    # Test template with special characters in variables
+    # Test template with special characters in variables (@ is NOT escaped in MarkdownV2)
     template = "Welcome *{name}*! Visit {url}"
     rendered = render_markdown_v2(template, name="user@domain.com", url="https://example.com")
-    expected = "Welcome *user\\@domain\\.com*! Visit https://example\\.com"
+    expected = "Welcome *user@domain\\.com*! Visit https://example\\.com"
     assert rendered == expected, f"Expected {expected}, got {rendered}"
     print(f"✓ Special chars in vars: '{rendered}'")
     
@@ -88,11 +88,11 @@ def test_validate_template():
     assert 'email' in missing
     print(f"✓ Missing variables detected: {missing}")
     
-    # Test extra variables allowed
+    # Test extra variables - should still be valid (template has name/amount, we only require name)
     valid, missing = validate_template(template, ['name'])
-    assert valid == False
-    assert 'amount' in missing
-    print("✓ Required variables checked")
+    assert valid == True  # Should be valid since 'name' is present in template
+    assert missing == []
+    print("✓ Subset of variables allowed")
 
 
 def test_strip_markdown():
