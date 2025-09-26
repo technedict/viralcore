@@ -123,7 +123,9 @@ if __name__ == "__main__":
     active_provider = get_active_provider()
     logger.info(f"Active Provider: {active_provider.name}")
     logger.info(f"API URL: {active_provider.api_url}")
-    logger.info(f"API Key: {active_provider.api_key[:5]}... (first 5 chars)") # Mask API key for display
+    logger.info(f"Active provider: {active_provider.name}")
+    logger.info(f"API endpoint: {active_provider.api_url}")
+    # API key fully redacted for security
     logger.info(f"View Service ID: {active_provider.view_service_id}")
     logger.info(f"Like Service ID: {active_provider.like_service_id}")
 

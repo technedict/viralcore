@@ -36,17 +36,28 @@ class CorrelationFilter(logging.Filter):
 class SecretSanitizer:
     """Sanitizes sensitive information from log messages and data."""
     
-    # Patterns for sensitive data
+    # Enhanced patterns for sensitive data
     SENSITIVE_PATTERNS = [
+        # API Keys and tokens - enhanced patterns
         (re.compile(r'(api[_-]?key["\']?\s*[:=]\s*["\']?)([^"\']+)', re.IGNORECASE), r'\1***REDACTED***'),
         (re.compile(r'(token["\']?\s*[:=]\s*["\']?)([^"\']+)', re.IGNORECASE), r'\1***REDACTED***'),
         (re.compile(r'(password["\']?\s*[:=]\s*["\']?)([^"\']+)', re.IGNORECASE), r'\1***REDACTED***'),
         (re.compile(r'(secret["\']?\s*[:=]\s*["\']?)([^"\']+)', re.IGNORECASE), r'\1***REDACTED***'),
         (re.compile(r'("key":\s*")([^"]+)', re.IGNORECASE), r'\1***REDACTED***'),
+        (re.compile(r'(authorization["\']?\s*[:=]\s*["\']?bearer\s+)([^"\']+)', re.IGNORECASE), r'\1***REDACTED***'),
+        
+        # Specific service patterns
+        (re.compile(r'(\d{10}:\w{35})', re.IGNORECASE), '***TELEGRAM_BOT_TOKEN***'),  # Telegram bot tokens
+        (re.compile(r'(FLWSECK-[a-zA-Z0-9\-]+)', re.IGNORECASE), '***FLUTTERWAVE_KEY***'),  # Flutterwave keys
+        (re.compile(r'(eyJ[a-zA-Z0-9_\-\.]{100,})', re.IGNORECASE), '***JWT_TOKEN***'),  # JWT tokens (longer ones)
+        
         # Bank account patterns
         (re.compile(r'\b\d{10,}\b'), '***ACCOUNT***'),
         # Credit card patterns (basic)
         (re.compile(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'), '***CARD***'),
+        
+        # Generic hex keys (40+ characters to avoid false positives)
+        (re.compile(r'\b[a-fA-F0-9]{40,64}\b'), '***HEX_KEY***'),
     ]
     
     @classmethod

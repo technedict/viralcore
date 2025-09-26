@@ -52,6 +52,7 @@ ENV/
 *.temp
 
 # Environment files
+.env
 .env.local
 .env.development
 .env.test
@@ -90,6 +91,15 @@ docs/_build/
 *_export_*.csv
 serviceid_mismatches.csv
 template_issues.html
+
+# Security scan reports
+dependency-scan.csv
+bandit-report.json
+secrets-scan.csv
+security-executive-summary.md
+
+# Temporary audit files
+/tmp/audit/
 
 # Sensitive config files
 settings/provider_config.json.backup

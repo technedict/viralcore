@@ -7,8 +7,15 @@ Fixes issues with over-escaping templates and provides safe send functionality.
 import logging
 import re
 from typing import Dict, Any, Optional
-from telegram import Bot
-from telegram.error import BadRequest
+
+try:
+    from telegram import Bot
+    from telegram.error import BadRequest
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    Bot = None
+    BadRequest = None
 
 from utils.logging import get_logger, correlation_context
 
@@ -19,7 +26,7 @@ def escape_markdown_v2(text: str) -> str:
     """
     Escape MarkdownV2 special characters in user-supplied text only.
     
-    MarkdownV2 special characters that need escaping:
+    According to Telegram MarkdownV2 specification, these characters need escaping:
     '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
     
     Args:
@@ -31,8 +38,8 @@ def escape_markdown_v2(text: str) -> str:
     if not isinstance(text, str):
         text = str(text)
     
-    # Characters that must be escaped in MarkdownV2
-    # Note: Order matters, escape backslashes first
+    # Characters that must be escaped in MarkdownV2 (official Telegram spec)
+    # Note: Order matters, escape backslashes first, and '$' and '@' are NOT special in MarkdownV2
     escape_chars = ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     
     result = text
@@ -78,7 +85,7 @@ def render_markdown_v2(template: str, **variables) -> str:
 
 
 async def safe_send(
-    bot: Bot,
+    bot,  # Bot type annotation removed to support optional telegram import
     chat_id: int,
     text: str,
     parse_mode: str = 'MarkdownV2',
@@ -101,6 +108,10 @@ async def safe_send(
     Returns:
         Message object if successful, None if all attempts failed
     """
+    
+    if not TELEGRAM_AVAILABLE:
+        logger.error("Telegram library not available, cannot send message")
+        return None
     
     with correlation_context(correlation_id) as corr_id:
         # Try primary parse mode
@@ -206,20 +217,23 @@ def _strip_markdown(text: str) -> str:
     """
     Strip all markdown formatting for plain text fallback.
     """
-    # Remove bold/italic markers
-    text = re.sub(r'\*([^*]+)\*', r'\1', text)
-    text = re.sub(r'(?<!\\)_([^_]+)_', r'\1', text)
+    # Remove bold/italic markers (not escaped ones)
+    text = re.sub(r'(?<!\\)\*([^*]+)(?<!\\)\*', r'\1', text)
+    text = re.sub(r'(?<!\\)_([^_]+)(?<!\\)_', r'\1', text)
     
     # Remove code markers
-    text = re.sub(r'`([^`]+)`', r'\1', text)
+    text = re.sub(r'(?<!\\)`([^`]+)(?<!\\)`', r'\1', text)
     
     # Remove links, keep text
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
     
-    # Remove escaping
-    escape_chars = ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    # Remove all escape sequences (backslash + special char → just the char)
+    escape_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     for char in escape_chars:
         text = text.replace(f'\\{char}', char)
+    
+    # Remove remaining double backslashes
+    text = text.replace('\\\\', '\\')
     
     return text
 

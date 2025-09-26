@@ -93,13 +93,22 @@ class APIConfig:
 
     @classmethod
     def validate(cls) -> None:
+        """Validate that required environment variables are set."""
+        required_keys = [
+            'TELEGRAM_BOT_TOKEN', 'FLUTTERWAVE_API_KEY', 'EXCHANGE_API_KEY'
+        ]
         missing = []
-        for key, value in cls.__dict__.items():
-            if key.isupper() and not key.startswith("__"):
-                if not value:
-                    missing.append(key)
+        for key in required_keys:
+            value = getattr(cls, key, None)
+            if not value or value == f'your_{key.lower()}_here':
+                missing.append(key)
+        
         if missing:
-            raise ConfigError(f"Missing environment variables: {', '.join(missing)}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Missing required environment variables: {', '.join(missing)}")
+            logger.warning("Please check your .env file or environment variable configuration")
+            # Don't raise exception to allow development mode
         
     @classmethod
     def get(cls, key: str) -> str:

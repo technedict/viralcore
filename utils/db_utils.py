@@ -38,6 +38,11 @@ def init_main_db() -> None:
                 is_admin INTEGER DEFAULT 0
             );
         ''')
+        
+        # Add indexes for better performance
+        c.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_users_affiliate_balance ON users(affiliate_balance)')
+        
         # --- UPDATED PURCHASES TABLE ---
         c.execute('''
             CREATE TABLE IF NOT EXISTS purchases (
@@ -55,6 +60,13 @@ def init_main_db() -> None:
             );
         ''')
         # --- END UPDATED PURCHASES TABLE ---
+        
+        # Add indexes for better performance
+        c.execute('CREATE INDEX IF NOT EXISTS idx_purchases_user_id ON purchases(user_id)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_purchases_plan_type ON purchases(plan_type)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_purchases_timestamp ON purchases(timestamp)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_purchases_transaction_ref ON purchases(transaction_ref)')
+        
         c.execute('''
             CREATE TABLE IF NOT EXISTS processed_transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +75,12 @@ def init_main_db() -> None:
                 processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         ''')
+        
+        # Add indexes for better performance  
+        c.execute('CREATE INDEX IF NOT EXISTS idx_processed_tx_hash ON processed_transactions(transaction_hash)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_processed_tx_user ON processed_transactions(user_id)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_processed_tx_timestamp ON processed_transactions(processed_at)')
+        
     print("Main DB initialized successfully.")
 
 def init_tweet_db() -> None:
