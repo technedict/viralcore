@@ -37,13 +37,20 @@ def init_operations_ledger():
         conn.commit()
 
 def generate_operation_id(user_id: int, operation_type: str, amount: float) -> str:
-    """Generate a deterministic operation ID for idempotency."""
+    """Generate a unique operation ID for this specific operation."""
     return f"{operation_type}_{user_id}_{amount}_{uuid.uuid4().hex[:8]}"
 
-def is_operation_completed(operation_id: str) -> bool:
+def is_operation_completed(operation_id: str, conn=None) -> bool:
     """Check if an operation has already been completed."""
-    init_operations_ledger()
-    with get_connection(DB_FILE) as conn:
+    if conn is None:
+        # Use separate connection if not provided
+        with get_connection(DB_FILE) as temp_conn:
+            c = temp_conn.cursor()
+            c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (operation_id,))
+            row = c.fetchone()
+            return row is not None and row['status'] == 'completed'
+    else:
+        # Use existing connection
         c = conn.cursor()
         c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (operation_id,))
         row = c.fetchone()
@@ -78,6 +85,7 @@ def atomic_balance_update(
     if not operation_id:
         operation_id = generate_operation_id(user_id, operation_type, abs(amount))
     
+    # Initialize ledger outside of transaction to avoid deadlocks
     init_operations_ledger()
     
     with get_connection(DB_FILE) as conn:
@@ -86,6 +94,12 @@ def atomic_balance_update(
             
             # Start exclusive transaction (SQLite-compatible locking)
             conn.execute("BEGIN EXCLUSIVE")
+            
+            # Double-check operation completion inside transaction
+            if operation_id and is_operation_completed(operation_id, conn):
+                logger.info(f"Operation {operation_id} already completed (double-check), skipping")
+                conn.rollback()
+                return True
             
             # Get current balance
             if balance_type == "affiliate":
