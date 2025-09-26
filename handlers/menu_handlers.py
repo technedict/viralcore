@@ -1056,15 +1056,87 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
             )
             print(transfer_response)
             if transfer_response.get("status") == "success":
-                # --- Update user's balance in DB ---
-                if is_affiliate_withdrawal:
-                    # Decrement affiliate balance by USD amount
-                    decrement_affiliate_balance(user_id_requester, withdrawal_amount_usd)
-                    logger.info(f"Affiliate withdrawal of ${withdrawal_amount_usd:.2f} processed for user {user_id_requester}")
-                else:
-                    # Decrement general post balance by USD amount (assuming monetary unit is USD)
-                    remove_amount(user_id_requester, withdrawal_amount_usd) # This should deduct from the user's earnings for posts
-                    logger.info(f"Standard withdrawal of ${withdrawal_amount_usd:.2f} processed for user {user_id_requester}")
+                # --- Validate and process balance update atomically ---
+                try:
+                    from utils.balance_operations import atomic_withdraw_operation, validate_withdrawal_request
+                    
+                    balance_type = "affiliate" if is_affiliate_withdrawal else "reply"
+                    
+                    # Validate withdrawal before processing
+                    is_valid, error_msg = validate_withdrawal_request(
+                        user_id_requester, balance_type, withdrawal_amount_usd
+                    )
+                    
+                    if not is_valid:
+                        logger.error(f"Withdrawal validation failed for user {user_id_requester}: {error_msg}")
+                        # Notify admin of validation failure
+                        validation_error_message = (
+                            f"❌ *WITHDRAWAL VALIDATION FAILED\\!*\n\n"
+                            f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
+                            f"Error: {escape_md(error_msg)}\n"
+                            f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
+                            f"The Flutterwave transfer was successful but balance update failed\\. "
+                            f"Manual intervention may be required\\."
+                        )
+                        await query.edit_message_text(
+                            validation_error_message,
+                            reply_markup=None,
+                            parse_mode='MarkdownV2'
+                        )
+                        return
+                    
+                    # Generate operation ID for idempotency
+                    operation_id = f"withdraw_{user_id_requester}_{withdrawal_amount_usd}_{request_id}"
+                    
+                    # Perform atomic withdrawal
+                    balance_success = atomic_withdraw_operation(
+                        user_id=user_id_requester,
+                        balance_type=balance_type,
+                        amount=withdrawal_amount_usd,
+                        reason=f"Withdrawal - Request ID: {request_id}",
+                        operation_id=operation_id
+                    )
+                    
+                    if not balance_success:
+                        logger.error(f"Failed to update {balance_type} balance for user {user_id_requester}")
+                        # Notify admin of balance update failure
+                        balance_error_message = (
+                            f"❌ *BALANCE UPDATE FAILED\\!*\n\n"
+                            f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
+                            f"Balance Type: {escape_md(balance_type.title())}\n"
+                            f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
+                            f"The Flutterwave transfer was successful but balance update failed\\. "
+                            f"Manual intervention required\\."
+                        )
+                        await query.edit_message_text(
+                            balance_error_message,
+                            reply_markup=None,
+                            parse_mode='MarkdownV2'
+                        )
+                        return
+                    
+                    logger.info(f"{balance_type.title()} withdrawal of ${withdrawal_amount_usd:.2f} processed for user {user_id_requester}")
+                    
+                except ImportError:
+                    # Fallback to original implementation
+                    logger.warning("Using non-atomic balance operations (balance_operations module not available)")
+                    if is_affiliate_withdrawal:
+                        # Decrement affiliate balance by USD amount
+                        success = decrement_affiliate_balance(user_id_requester, withdrawal_amount_usd)
+                        if not success:
+                            logger.error(f"Failed to decrement affiliate balance for user {user_id_requester}")
+                            return
+                        logger.info(f"Affiliate withdrawal of ${withdrawal_amount_usd:.2f} processed for user {user_id_requester}")
+                    else:
+                        # Decrement general post balance by USD amount
+                        success = remove_amount(user_id_requester, withdrawal_amount_usd)
+                        if not success:
+                            logger.error(f"Failed to decrement reply balance for user {user_id_requester}")
+                            return
+                        logger.info(f"Standard withdrawal of ${withdrawal_amount_usd:.2f} processed for user {user_id_requester}")
+                except Exception as e:
+                    logger.error(f"Unexpected error in balance operations: {e}")
+                    return
 
 
                 # Notify the user
