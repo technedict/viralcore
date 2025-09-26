@@ -35,17 +35,18 @@ from handlers.track_groups_handler import track_groups
 from handlers.link_click_handlers import handle_link_click
 from handlers.payment_handler import PaymentHandler
 
-# --- Logging setup ---
-logging.basicConfig(
-    filename="bot.log",
-    filemode="a",
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# --- Enhanced Logging Setup ---
+from utils.logging import setup_logging, get_logger
 
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+# Setup comprehensive logging configuration
+setup_logging(
+    bot_log_level=logging.WARNING,      # Only WARNING and ERROR to bot.log
+    console_log_level=logging.INFO,     # INFO and DEBUG to console
+    debug_file_log_level=logging.DEBUG, # All levels to debug.log (filtered)
+    use_structured_format=True          # Use JSON structured format
+)
+
+logger = get_logger(__name__)
 
 # --- Custom Filter Class Definition ---
 # This class will be used as a custom filter for the MessageHandler
