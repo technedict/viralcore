@@ -1178,24 +1178,49 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                 logger.info(f"Admin message for request {request_id} updated to approved.")
 
             else:
-                # Flutterwave transfer failed
+                # Flutterwave transfer failed - show user-friendly and admin messages
+                try:
+                    from utils.api_client import create_user_friendly_error_message, create_admin_error_message
+                    
+                    # Get trace ID if available
+                    trace_id = transfer_response.get("trace_id", "N/A")
+                    error_message = transfer_response.get("message", "Unknown error")
+                    
+                    # Create user-friendly error message
+                    user_error_msg = create_user_friendly_error_message(
+                        error_message, "withdrawal"
+                    )
+                    
+                    # Create detailed admin error message
+                    admin_error_details = create_admin_error_message(
+                        error_message, "Flutterwave withdrawal"
+                    )
+                    
+                except ImportError:
+                    # Fallback to simple messages
+                    trace_id = "N/A"
+                    user_error_msg = "There was a problem processing your withdrawal. An admin has been notified and will review it shortly."
+                    admin_error_details = f"Flutterwave API Error: {transfer_response.get('message', 'Unknown error')}"
+                
+                # Admin error message with technical details
                 error_message_admin = (
-                    f"❌ *FLUTTERWAVE TRANSFER FAILED for Request ID {request_id}\!* ❌\n\n" # ##### MODIFICATION: Escaped '!'
+                    f"❌ *FLUTTERWAVE TRANSFER FAILED for Request ID {request_id}\\!* ❌\n\n"
                     f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
                     f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                     f"Details:\n`{escaped_bank_details}`\n\n"
-                    f"Reason: {escape_md(transfer_response.get("message"))}\n\n" # ##### MODIFICATION: Escape message from Flutterwave
-                    f"Please investigate and manually process or contact Flutterwave support\." # ##### MODIFICATION: Escaped '.'
+                    f"Error: {escape_md(transfer_response.get('message', 'Unknown error'))}\n"
+                    f"Trace ID: `{trace_id}`\n\n"
+                    f"Please investigate and manually process or contact Flutterwave support\\."
                 )
                 await query.edit_message_text(error_message_admin, reply_markup=None, parse_mode='MarkdownV2')
-                logger.error(f"Flutterwave transfer failed for request {request_id}: {transfer_response}")
+                logger.error(f"Flutterwave transfer failed for request {request_id}: {admin_error_details}")
 
-                # Optionally notify user about failure (e.g., "admin is reviewing")
+                # User-friendly notification
                 user_failed_notification = (
-                    f"⚠️ Your withdrawal request for *₦{int(withdrawal_amount_ngn)}* could not be processed automatically\.\n\n "
-                    f"An admin has been notified and will review it shortly\.\n\n "
-                    f"We apologize for the inconvenience\." # ##### MODIFICATION: Escaped '.'
+                    f"⚠️ {escape_md(user_error_msg)}\n\n"
+                    f"Your withdrawal request reference: `{request_id}`\n\n"
+                    f"We apologize for the inconvenience\\."
                 )
                 try:
                     await context.bot.send_message(
