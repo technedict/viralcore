@@ -475,22 +475,72 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def switch_boost_provider(update: Update, context: ContextTypes.DEFAULT_TYPE, provider_name: str):
     """
     Handles the logic for switching the active boost service provider.
+    Uses new messaging system and includes validation.
     """
-    success = ProviderConfig.set_active_provider_name(provider_name)
-    if success:
-        await clear_bot_messages(update, context)
-        keyboard = [[InlineKeyboardButton("↩️ Back", callback_data="admin_boost_menu")]] # Back to boost menu
-        text = f"✅ Boost provider switched to: *{provider_name.title()}*"
-        msg = await update.callback_query.message.reply_text(
-            text=text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
-        logger.info(f"Admin {update.callback_query.from_user.id} successfully switched boost provider to {provider_name}.")
-    else:
-        await update.callback_query.message.reply_text(
-            text="❌ Failed to switch boost provider. Please try again later.",
-            parse_mode="Markdown"
-        )
-        logger.error(f"Admin {update.callback_query.from_user.id} failed to switch boost provider to {provider_name}.")
+    from utils.messaging import render_markdown_v2, safe_send, TEMPLATES
+    from utils.logging import get_logger, correlation_context, generate_correlation_id
+    from utils.boost_provider_utils import PROVIDERS
+    
+    logger = get_logger(__name__)
+    correlation_id = generate_correlation_id()
+    
+    with correlation_context(correlation_id):
+        # Validate provider exists
+        if provider_name not in PROVIDERS:
+            error_text = render_markdown_v2(
+                "❌ Invalid provider: {provider_name}\\. Available providers: {available}",
+                provider_name=provider_name,
+                available=", ".join(PROVIDERS.keys())
+            )
+            
+            await safe_send(
+                update.callback_query.bot,
+                chat_id=update.callback_query.message.chat_id,
+                text=error_text,
+                correlation_id=correlation_id
+            )
+            logger.warning(f"Admin {update.callback_query.from_user.id} attempted to switch to invalid provider: {provider_name}")
+            return
+        
+        # Attempt provider switch with proper locking
+        success = ProviderConfig.set_active_provider_name(provider_name)
+        
+        if success:
+            await clear_bot_messages(update, context)
+            keyboard = [[InlineKeyboardButton("↩️ Back", callback_data="admin_boost_menu")]]
+            
+            # Use template for consistent messaging
+            text = render_markdown_v2(
+                TEMPLATES['provider_switched'],
+                provider_name=provider_name.title()
+            )
+            
+            msg = await safe_send(
+                update.callback_query.bot,
+                chat_id=update.callback_query.message.chat_id,
+                text=text,
+                correlation_id=correlation_id,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+            if msg:
+                context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
+            
+            logger.info(
+                f"Admin {update.callback_query.from_user.id} successfully switched boost provider to {provider_name}",
+                extra={'user_id': update.callback_query.from_user.id, 'provider_name': provider_name}
+            )
+        else:
+            error_text = "❌ Failed to switch boost provider\\. Please try again later\\."
+            
+            await safe_send(
+                update.callback_query.bot,
+                chat_id=update.callback_query.message.chat_id,
+                text=error_text,
+                correlation_id=correlation_id
+            )
+            
+            logger.error(
+                f"Admin {update.callback_query.from_user.id} failed to switch boost provider to {provider_name}",
+                extra={'user_id': update.callback_query.from_user.id, 'provider_name': provider_name}
+            )

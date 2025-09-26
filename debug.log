@@ -8,3 +8,17 @@
 {"timestamp": "2025-09-26T16:17:14.416042Z", "level": "INFO", "module": "__main__", "message": "Analyzing provider configuration consistency...", "correlation_id": "none"}
 {"timestamp": "2025-09-26T16:17:14.416193Z", "level": "INFO", "module": "__main__", "message": "Mismatch Summary:", "correlation_id": "none"}
 {"timestamp": "2025-09-26T16:17:14.416333Z", "level": "INFO", "module": "__main__", "message": "Service ID mismatch detection completed", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:23:26.970802Z", "level": "INFO", "module": "utils.job_system", "message": "Job system database initialized", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:23:26.971274Z", "level": "DEBUG", "module": "asyncio", "message": "Using selector: EpollSelector", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:23:26.974484Z", "level": "INFO", "module": "utils.job_system", "message": "Created boost job 101b8180-15e4-4e18-81de-f9cd3149ea9e for provider smmflare", "correlation_id": "91cb0b42", "user_id": 12345, "job_id": "101b8180-15e4-4e18-81de-f9cd3149ea9e", "provider_name": "smmflare"}
+{"timestamp": "2025-09-26T16:25:51.991734Z", "level": "INFO", "module": "utils.job_system", "message": "Job system database initialized", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:51.992237Z", "level": "DEBUG", "module": "asyncio", "message": "Using selector: EpollSelector", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:51.995408Z", "level": "INFO", "module": "utils.job_system", "message": "Created boost job a33c1b62-90c8-44a1-aaf6-252c8b3f28f3 for provider smmflare", "correlation_id": "17e7d86b", "user_id": 12345, "job_id": "a33c1b62-90c8-44a1-aaf6-252c8b3f28f3", "provider_name": "smmflare"}
+{"timestamp": "2025-09-26T16:25:52.067265Z", "level": "INFO", "module": "__main__", "message": "Starting service ID mismatch detection...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.067473Z", "level": "INFO", "module": "__main__", "message": "Checking jobs table...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.068069Z", "level": "INFO", "module": "__main__", "message": "Found 0 job table mismatches", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.068214Z", "level": "INFO", "module": "__main__", "message": "Checking log file bot.log for last 7 days...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.068549Z", "level": "INFO", "module": "__main__", "message": "Found 0 log file mismatches", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.068681Z", "level": "INFO", "module": "__main__", "message": "Analyzing provider configuration consistency...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.068810Z", "level": "INFO", "module": "__main__", "message": "Mismatch Summary:", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:25:52.068927Z", "level": "INFO", "module": "__main__", "message": "Service ID mismatch detection completed", "correlation_id": "none"}

@@ -208,7 +208,69 @@ class BoostManager:
     def __init__(self):
         self._tasks: Dict[str, asyncio.Task] = {}
 
-    def start_boost(self, link: str, likes: int = 100, views: int = 500, comments: int = 0):
+    def start_boost(self, link: str, likes: int = 100, views: int = 500, comments: int = 0, user_id: Optional[int] = None):
+        """
+        Start boost with enhanced service if available, otherwise fallback to legacy.
+        
+        Args:
+            link: URL to boost
+            likes: Number of likes requested
+            views: Number of views requested  
+            comments: Number of comments requested
+            user_id: Optional user ID for tracking
+        """
+        # Try to use enhanced service first
+        try:
+            from utils.boost_utils_enhanced import enhanced_boost_service
+            
+            if enhanced_boost_service:
+                return self._start_enhanced_boost(link, likes, views, comments, user_id)
+        except ImportError:
+            logger.debug("[BoostManager] Enhanced service not available, using legacy")
+        except Exception as e:
+            logger.warning(f"[BoostManager] Enhanced service failed, falling back to legacy: {e}")
+        
+        # Fallback to legacy implementation
+        return self._start_legacy_boost(link, likes, views, comments)
+    
+    def _start_enhanced_boost(self, link: str, likes: int, views: int, comments: int, user_id: Optional[int]):
+        """Start boost using enhanced service with job system."""
+        if link in self._tasks and not self._tasks[link].done():
+            logger.info(f"[BoostManager] Boost for {link} is already running.")
+            return
+        
+        async def _enhanced_boost_task():
+            try:
+                from utils.boost_utils_enhanced import enhanced_boost_service
+                from utils.logging import generate_correlation_id
+                
+                correlation_id = generate_correlation_id()
+                
+                # Use enhanced service which handles all error handling, retries, etc.
+                response = await enhanced_boost_service.request_boost(
+                    link=link,
+                    likes=likes,
+                    views=views,
+                    comments=comments,
+                    user_id=user_id,
+                    correlation_id=correlation_id
+                )
+                
+                logger.info(
+                    f"[BoostManager] Enhanced boost completed for {link}: {response.status}",
+                    extra={'job_id': response.job_id, 'correlation_id': correlation_id}
+                )
+            except Exception as e:
+                logger.error(f"[BoostManager] Enhanced boost failed for {link}: {e}")
+            finally:
+                self._tasks.pop(link, None)
+        
+        task = asyncio.create_task(_enhanced_boost_task())
+        self._tasks[link] = task
+        logger.info(f"[BoostManager] Enhanced boost task for {link} scheduled.")
+    
+    def _start_legacy_boost(self, link: str, likes: int, views: int, comments: int):
+        """Legacy boost implementation - kept for backward compatibility."""
         if link in self._tasks and not self._tasks[link].done():
             logger.info(f"[BoostManager] Boost for {link} is already running.")
             return
