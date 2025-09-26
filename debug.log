@@ -22,3 +22,18 @@
 {"timestamp": "2025-09-26T16:25:52.068681Z", "level": "INFO", "module": "__main__", "message": "Analyzing provider configuration consistency...", "correlation_id": "none"}
 {"timestamp": "2025-09-26T16:25:52.068810Z", "level": "INFO", "module": "__main__", "message": "Mismatch Summary:", "correlation_id": "none"}
 {"timestamp": "2025-09-26T16:25:52.068927Z", "level": "INFO", "module": "__main__", "message": "Service ID mismatch detection completed", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:11.016943Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Signal handlers registered for graceful shutdown", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.172754Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Job queue database initialized", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.234638Z", "level": "INFO", "module": "__main__", "message": "Bot is up and running!", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.280510Z", "level": "DEBUG", "module": "asyncio", "message": "Using selector: EpollSelector", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.281642Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Starting graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.282702Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Phase 1: Stopping new work acceptance", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.283581Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Shutting down boost manager...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.284556Z", "level": "INFO", "module": "utils.boost_utils", "message": "[BoostManager] Cancelling all active boost tasks.", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.287287Z", "level": "INFO", "module": "utils.boost_utils", "message": "[BoostManager] No active boost tasks to cancel.", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.288322Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Boost manager shutdown complete", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.289311Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "No background tasks to shutdown", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.290350Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Running 1 cleanup callbacks...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.290751Z", "level": "INFO", "module": "__main__", "message": "Performing startup recovery...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.292201Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Phase 5: Cleaning up remaining jobs", "correlation_id": "none"}
+{"timestamp": "2025-09-26T17:16:15.294127Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Graceful shutdown completed successfully", "correlation_id": "none"}

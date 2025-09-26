@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 from utils.config import APIConfig
 from utils.db_utils import TWEETS_DB_FILE, get_x_purchases
 from utils.db_utils import get_user_metrics, get_referrer, save_purchase, update_affiliate_balance
-from ViralCore_V2.utils.link_utils import disable_bitly_link
+from utils.link_utils import disable_bitly_link
 from handlers.payment_handler import PaymentHandler
 from utils.admin_db_utils import add_posts, get_username_by_payment
 

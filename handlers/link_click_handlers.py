@@ -7,7 +7,7 @@ import logging
 from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 from utils.db_utils import TWEETS_DB_FILE, GROUPS_TWEETS_DB_FILE
-from ViralCore_V2.utils.link_utils import get_click_count, disable_bitly_link
+from utils.link_utils import get_click_count, disable_bitly_link
 from handlers.raid_balance_handlers import is_raid_active
 
 logger = logging.getLogger(__name__)
