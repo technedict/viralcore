@@ -1,0 +1,10 @@
+{"timestamp": "2025-09-26T16:13:50.742384Z", "level": "DEBUG", "module": "test", "message": "This should go to debug.log only", "correlation_id": "test123"}
+{"timestamp": "2025-09-26T16:13:50.742524Z", "level": "INFO", "module": "test", "message": "This should go to debug.log and console", "correlation_id": "test123"}
+{"timestamp": "2025-09-26T16:17:14.414385Z", "level": "INFO", "module": "__main__", "message": "Starting service ID mismatch detection...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.414619Z", "level": "INFO", "module": "__main__", "message": "Checking jobs table...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.415357Z", "level": "INFO", "module": "__main__", "message": "Found 0 job table mismatches", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.415509Z", "level": "INFO", "module": "__main__", "message": "Checking log file bot.log for last 7 days...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.415868Z", "level": "INFO", "module": "__main__", "message": "Found 0 log file mismatches", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.416042Z", "level": "INFO", "module": "__main__", "message": "Analyzing provider configuration consistency...", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.416193Z", "level": "INFO", "module": "__main__", "message": "Mismatch Summary:", "correlation_id": "none"}
+{"timestamp": "2025-09-26T16:17:14.416333Z", "level": "INFO", "module": "__main__", "message": "Service ID mismatch detection completed", "correlation_id": "none"}

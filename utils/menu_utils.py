@@ -63,19 +63,9 @@ def main_menu_keyboard(is_admin=False) -> list:
     return keyboard
 
 def escape_md(text: str) -> str:
-    """Helper function to escape MarkdownV2 special characters."""
-    # List of special characters in MarkdownV2 that need escaping
-    # Characters that must be escaped: '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
-    # Escape '.' specifically if it's not always part of code blocks.
-    # Note: Telegram's parse_mode='MarkdownV2' requires careful escaping.
-    # The order of replacement matters: escape '\' first if it's in the list.
-    
-    # Define characters to escape
-    # Escape '\' first to prevent double-escaping other characters
-    escape_chars = r'_*[]()~`>#+-=|{}.!' # Removed \ from here, added separately
-    text = text.replace('\\', '\\\\') # Escape backslashes first
-
-    # Escape other special characters
-    for char in escape_chars:
-        text = text.replace(char, f'\\{char}')
-    return text
+    """
+    Helper function to escape MarkdownV2 special characters.
+    DEPRECATED: Use utils.messaging.escape_markdown_v2() instead.
+    """
+    from utils.messaging import escape_markdown_v2
+    return escape_markdown_v2(text)
