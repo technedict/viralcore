@@ -325,7 +325,10 @@ class GracefulShutdownManager:
         """Setup signal handlers for graceful shutdown."""
         def signal_handler(signum, frame):
             logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-            asyncio.create_task(self.graceful_shutdown())
+            try:
+                asyncio.run(self.graceful_shutdown())
+            except Exception as e:
+                logger.error(f"Error during signal-triggered shutdown: {e}")
         
         # Register signal handlers
         signal.signal(signal.SIGINT, signal_handler)
