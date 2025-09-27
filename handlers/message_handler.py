@@ -4,7 +4,14 @@ from handlers.admin_message_handlers import admin_message_handler
 from handlers.custom_order_handlers import custom_order_handler
 
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    flags = context.user_data
+    # context.user_data can be None in some edge cases (e.g., if persistence/user data
+    # store not initialized yet). Guard against None so .get calls below are safe.
+    raw_flags = getattr(context, "user_data", None)
+    flags = raw_flags or {}
+    if raw_flags is None:
+        # Lightweight debug note; avoids crashing the handler path. Replace with central logger if available.
+        # We intentionally do not import project-wide logging here to prevent circular imports.
+        print("[message_router] context.user_data was None; using empty dict fallback")
 
     # Check for service ID input first
     if flags.get("awaiting_service_id_input"):
