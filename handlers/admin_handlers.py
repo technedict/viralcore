@@ -494,7 +494,7 @@ async def switch_boost_provider(update: Update, context: ContextTypes.DEFAULT_TY
             )
             
             await safe_send(
-                update.callback_query.bot,
+                update.callback_query._bot,
                 chat_id=update.callback_query.message.chat_id,
                 text=error_text,
                 correlation_id=correlation_id
@@ -516,7 +516,7 @@ async def switch_boost_provider(update: Update, context: ContextTypes.DEFAULT_TY
             )
             
             msg = await safe_send(
-                update.callback_query.bot,
+                update.callback_query._bot,
                 chat_id=update.callback_query.message.chat_id,
                 text=text,
                 correlation_id=correlation_id,
@@ -534,7 +534,7 @@ async def switch_boost_provider(update: Update, context: ContextTypes.DEFAULT_TY
             error_text = "❌ Failed to switch boost provider\\. Please try again later\\."
             
             await safe_send(
-                update.callback_query.bot,
+                update.callback_query._bot,
                 chat_id=update.callback_query.message.chat_id,
                 text=error_text,
                 correlation_id=correlation_id
