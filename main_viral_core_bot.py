@@ -13,8 +13,8 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
-# Make sure to import BaseFilter
-from telegram.ext.filters import BaseFilter # <--- Add this import!
+# Ensure BaseFilter is imported (used for custom filter classes)
+from telegram.ext.filters import BaseFilter
 
 from utils.config import APIConfig
 from utils.db_utils import (
@@ -26,7 +26,14 @@ from utils.db_utils import (
 )
 from utils.graceful_shutdown import shutdown_manager
 from handlers.start_handler import start
-from handlers.link_submission_handlers import submitlink, handle_twitter_link, x_account_selection_handler, tg_account_selection_handler, handle_tg_link, handle_awaiting_x_poll_details
+from handlers.link_submission_handlers import (
+    submitlink,
+    handle_twitter_link,
+    x_account_selection_handler,
+    tg_account_selection_handler,
+    handle_tg_link,
+    handle_awaiting_x_poll_details
+)
 from handlers.raid_balance_handlers import raid, stop_raid, balance, addposts
 from handlers.menu_handlers import menu_handler, handle_withdrawal_approval, handle_replies_approval
 from handlers.admin_handlers import admin_panel_handler
@@ -35,32 +42,34 @@ from handlers.track_groups_handler import track_groups
 from handlers.link_click_handlers import handle_link_click
 from handlers.payment_handler import PaymentHandler
 
-# --- Enhanced Logging Setup ---
+# Enhanced Logging Setup
 from utils.logging import setup_logging, get_logger
 
 # Setup comprehensive logging configuration
 setup_logging(
-    bot_log_level=logging.WARNING,      # Only WARNING and ERROR to bot.log
-    console_log_level=logging.INFO,     # INFO and DEBUG to console
-    debug_file_log_level=logging.DEBUG, # All levels to debug.log (filtered)
-    use_structured_format=True          # Use JSON structured format
+    bot_log_level=logging.WARNING,
+    console_log_level=logging.INFO,
+    debug_file_log_level=logging.DEBUG,
+    use_structured_format=True
 )
 
 logger = get_logger(__name__)
 
+
 # --- Custom Filter Class Definition ---
-# This class will be used as a custom filter for the MessageHandler
-class IsAwaitingXPollDetails(BaseFilter): # <--- Inherit from BaseFilter
+class IsAwaitingXPollDetails(BaseFilter):
+    """
+    Custom filter used to detect when the user is expected to provide
+    X/Twitter poll details. Returns True only if user_data indicates
+    we're awaiting the details.
+    """
     def __call__(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-        """
-        Checks if the bot is awaiting X poll details from the user.
-        """
-        if update.effective_user: # Ensure there's an effective user
+        if update.effective_user:
             return context.user_data.get("awaiting_x_poll_details", False)
-        return False # If no effective user, this filter should not apply
+        return False
 
 
-def main():
+async def main():
     # Validate and load configuration
     APIConfig.validate()
 
@@ -70,13 +79,19 @@ def main():
     init_tg_db()
     init_groups_db()
     init_custom_db()
-    
-    # Initialize shutdown manager and setup signal handlers
-    shutdown_manager.setup_signal_handlers()
+
+    # Initialize shutdown manager job queue (but DO NOT register signal handlers yet)
     shutdown_manager.init_job_queue()
 
     # Build the application
     app = ApplicationBuilder().token(APIConfig.TELEGRAM_BOT_TOKEN).build()
+
+    # attach app to shutdown manager so it can stop polling / close http client early
+    shutdown_manager.set_app(app)
+
+    # Now that the app is attached, register the signal handlers.
+    # This ensures signal handler can immediately stop polling and close the client.
+    shutdown_manager.setup_signal_handlers()
 
     # Instantiate and store the shared PaymentHandler
     payment_handler = PaymentHandler()
@@ -103,7 +118,6 @@ def main():
         admin_panel_handler,
         pattern=r"^admin_"
     ))
-    # NEW: Specific handler for withdrawal approvals/rejections
     app.add_handler(CallbackQueryHandler(
         handle_withdrawal_approval,
         pattern=r"^(approve_withdrawal_|reject_withdrawal_)\d+$"
@@ -114,7 +128,6 @@ def main():
     ))
     app.add_handler(CallbackQueryHandler(
         menu_handler,
-        # Updated pattern: Matches anything that is NOT 'admin_', 'approve_withdrawal_', or 'reject_withdrawal_'
         pattern=r"^(?!admin_|approve_withdrawal_|reject_withdrawal_|approve_replies_order_|reject_replies_order_).*"
     ))
 
@@ -124,73 +137,120 @@ def main():
         ChatMemberHandler.MY_CHAT_MEMBER
     ))
 
-   # 1. Register the handler that specifically waits for poll details.
-    # It uses our custom filter class instance.
-    # This handler must be added *before* the general Twitter/X link handler.
+    # Message handlers with grouping and custom filter
     app.add_handler(MessageHandler(
-        filters.Regex(r"https?://(?:twitter\.com|x\.com)/.+/status/\d+") & ~filters.COMMAND & filters.ChatType.PRIVATE & IsAwaitingXPollDetails(), # <--- Use an instance of the class!
+        filters.Regex(r"https?://(?:twitter\.com|x\.com)/.+/status/\d+") & ~filters.COMMAND & filters.ChatType.PRIVATE & IsAwaitingXPollDetails(),
         handle_awaiting_x_poll_details
-    ), group=0) # Assign a group with higher priority (lower number)
+    ), group=0)
 
-    # 2. Register the general Twitter/X link handler.
-    # This will only be reached if the custom filter did NOT match.
     app.add_handler(MessageHandler(
         filters.Regex(r"https?://(?:twitter\.com|x\.com)/.+/status/\d+") & filters.ChatType.PRIVATE,
         handle_twitter_link
-    ), group=1) # Assign a group with lower priority (higher number)
+    ), group=1)
 
     app.add_handler(MessageHandler(
         filters.Regex(r"^https?:\/\/(www\.)?(t\.me|telegram\.me|telegram\.dog)\/"),
         handle_tg_link
     ))
 
-    # Bitly click‐tracking links
     app.add_handler(MessageHandler(
         filters.Regex(r"https?://bit\.ly/.+"),
         handle_link_click
     ))
 
-    # Transaction hash replies (crypto payments)
     app.add_handler(MessageHandler(
-        filters.Regex(r"^(0x[a-fA-F0-9]{64}|[a-fA-F0-9]{64}|[1-9A-HJ-NP-Za-km-z]{43,})$")
-        & filters.ChatType.PRIVATE,
+        filters.Regex(r"^(0x[a-fA-F0-9]{64}|[a-fA-F0-9]{64}|[1-9A-HJ-NP-Za-km-z]{43,})$") & filters.ChatType.PRIVATE,
         payment_handler.handle_transaction_hash_input
     ))
 
-    # --- Fallback Text Handlers ---
-    # Admin replies to flagged prompts
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         message_router
     ))
 
     logger.info("Bot is up and running!")
-    
+
     # Register cleanup callback for recovery on startup
     async def startup_recovery():
         logger.info("Performing startup recovery...")
         recovered_jobs = await shutdown_manager.recover_stale_jobs(threshold_minutes=30)
         if recovered_jobs > 0:
             logger.info(f"Recovered {recovered_jobs} stale jobs on startup")
-    
+
     shutdown_manager.register_cleanup_callback(startup_recovery)
-    
-    # Run startup recovery before starting the bot
+
+    # Run startup recovery immediately (best-effort; log errors but continue)
     try:
-        asyncio.run(startup_recovery())
+        await startup_recovery()
     except Exception as e:
         logger.error(f"Error during startup recovery: {e}")
-    
+
+    # ----- Application lifecycle management (robust across PTB versions) -----
     try:
-        # Start the bot
-        app.run_polling()
+        # Initialize internals and start app
+        await app.initialize()
+        await app.start()
+
+        # Start the Updater/poller if available
+        if hasattr(app, "updater") and hasattr(app.updater, "start_polling"):
+            try:
+                await app.updater.start_polling()
+                logger.info("Updater polling started (via app.updater.start_polling()).")
+            except Exception as e:
+                logger.warning(f"app.updater.start_polling() failed: {e}")
+        else:
+            logger.info("No app.updater.start_polling available; assuming app will handle polling via handlers.")
+
+        # Wait on the shutdown event exposed by the shutdown manager.
+        # The signal handler schedules graceful_shutdown and sets this event.
+        shutdown_event = getattr(shutdown_manager, "shutdown_event", None)
+        if shutdown_event is not None:
+            logger.info("Waiting for shutdown_event from shutdown_manager...")
+            await shutdown_event.wait()
+        else:
+            logger.info("No shutdown_event found on shutdown_manager. Waiting until cancelled (Ctrl+C).")
+            stop_event = asyncio.Event()
+            try:
+                await stop_event.wait()
+            except asyncio.CancelledError:
+                pass
+
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down...")
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+    except Exception:
+        logger.exception("Unexpected error while running the bot")
     finally:
-        # Perform graceful shutdown
-        asyncio.run(shutdown_manager.graceful_shutdown())
+        # ----- Clean shutdown -----
+        logger.info("Starting clean shutdown of Application and background managers...")
+
+        # First, let shutdown_manager do the heavy lifting: stop polling and close http client
+        try:
+            await shutdown_manager.graceful_shutdown()
+        except Exception:
+            logger.exception("Error during graceful_shutdown")
+
+        # Then stop the updater and application as additional cleanup
+        if hasattr(app, "updater") and hasattr(app.updater, "stop_polling"):
+            try:
+                await app.updater.stop_polling()
+                logger.info("Updater polling stopped.")
+            except Exception:
+                logger.exception("Error while stopping updater polling")
+
+        try:
+            await app.stop()
+        except Exception:
+            logger.exception("Error during app.stop()")
+
+        try:
+            if hasattr(app, "shutdown"):
+                await app.shutdown()
+        except Exception:
+            logger.exception("Error during app.shutdown()")
+
+    logger.info("Shutdown complete.")
+
 
 if __name__ == "__main__":
-    main()
+    # Run the main function inside asyncio's event loop.
+    asyncio.run(main())
