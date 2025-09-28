@@ -339,7 +339,7 @@ class WithdrawalService:
                 c.execute('''
                     SELECT * FROM withdrawals 
                     WHERE id = ? AND payment_mode = 'manual'
-                    ORDER BY id FOR UPDATE
+                    ORDER BY id
                 ''', (withdrawal_id,))
                 
                 row = c.fetchone()
@@ -430,7 +430,7 @@ class WithdrawalService:
                 c.execute('''
                     SELECT * FROM withdrawals 
                     WHERE id = ? AND payment_mode = 'manual'
-                    ORDER BY id FOR UPDATE
+                    ORDER BY id
                 ''', (withdrawal_id,))
                 
                 row = c.fetchone()
@@ -508,12 +508,12 @@ class WithdrawalService:
             try:
                 conn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
                 
-                # Get withdrawal with row lock
+                # Get withdrawal with row lock (SQLite compatible)
                 c = conn.cursor()
                 c.execute('''
                     SELECT * FROM withdrawals 
                     WHERE id = ?
-                    ORDER BY id FOR UPDATE
+                    ORDER BY id
                 ''', (withdrawal_id,))
                 
                 row = c.fetchone()
