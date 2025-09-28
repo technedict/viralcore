@@ -70,7 +70,9 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         keyboard = [
             [InlineKeyboardButton("👥 User Management", callback_data="admin_users_menu")],
             [InlineKeyboardButton("💳 Payment Management", callback_data="admin_payments_menu")],
+            [InlineKeyboardButton("🏦 Withdrawal Management", callback_data="admin_withdrawals_menu")],
             [InlineKeyboardButton("🚀 Boost Service", callback_data="admin_boost_menu")],
+            [InlineKeyboardButton("⚙️ Service Management", callback_data="admin_services_menu")],
             [InlineKeyboardButton("📝 Reply Guys", callback_data="admin_reply_guys_menu")],
             [InlineKeyboardButton("📝 Content & Replies", callback_data="admin_content_menu")],
             [InlineKeyboardButton("↩️ Back to Main Menu", callback_data="main_menu")]
@@ -178,6 +180,18 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
+
+    elif data == "admin_withdrawals_menu":
+        # Delegate to withdrawal handlers
+        from handlers.admin_withdrawal_handlers import admin_withdrawals_menu_handler
+        await admin_withdrawals_menu_handler(update, context)
+        return
+    
+    elif data == "admin_services_menu":
+        # Delegate to service handlers
+        from handlers.admin_service_handlers import admin_services_menu_handler
+        await admin_services_menu_handler(update, context)
+        return
 
     # --- Individual Action Handlers ---
     elif data == "admin_broadcast":
