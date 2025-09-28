@@ -69,12 +69,12 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         text = "🛠️ *Admin Panel* 🛠️\nSelect a category:"
         keyboard = [
             [InlineKeyboardButton("👥 User Management", callback_data="admin_users_menu")],
+            [InlineKeyboardButton("📝 Reply Guys Management", callback_data="admin_reply_guys_menu")],
             [InlineKeyboardButton("💳 Payment Management", callback_data="admin_payments_menu")],
             [InlineKeyboardButton("🏦 Withdrawal Management", callback_data="admin_withdrawals_menu")],
+            [InlineKeyboardButton("📝 Content & Replies", callback_data="admin_content_menu")],
             [InlineKeyboardButton("🚀 Boost Service", callback_data="admin_boost_menu")],
             [InlineKeyboardButton("⚙️ Service Management", callback_data="admin_services_menu")],
-            [InlineKeyboardButton("📝 Reply Guys", callback_data="admin_reply_guys_menu")],
-            [InlineKeyboardButton("📝 Content & Replies", callback_data="admin_content_menu")],
             [InlineKeyboardButton("↩️ Back to Main Menu", callback_data="main_menu")]
         ]
 

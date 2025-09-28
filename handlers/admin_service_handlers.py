@@ -12,6 +12,7 @@ from telegram.constants import ParseMode
 
 from utils.boosting_service_manager import get_boosting_service_manager, ServiceType
 from utils.messaging import escape_markdown_v2
+from utils.menu_utils import clear_bot_messages
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,10 @@ async def admin_services_menu_handler(update: Update, context: ContextTypes.DEFA
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to access this menu.")
+        msg = await query.message.reply_text("❌ You don't have permission to access this menu.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     keyboard = [
@@ -42,11 +45,12 @@ async def admin_services_menu_handler(update: Update, context: ContextTypes.DEFA
         "Manage provider service IDs for likes and views boosting\\."
     )
     
-    await query.edit_message_text(
+    msg = await query.message.reply_text(
         menu_text,
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN_V2
     )
+    context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
 async def admin_services_current_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show current provider service mappings."""
@@ -57,8 +61,10 @@ async def admin_services_current_handler(update: Update, context: ContextTypes.D
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to access this feature.")
+        msg = await query.message.reply_text("❌ You don't have permission to access this feature.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Get current mappings
@@ -70,12 +76,13 @@ async def admin_services_current_handler(update: Update, context: ContextTypes.D
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(
+        msg = await query.message.reply_text(
             "❌ *No Service Mappings Found*\n\n"
             "No active boosting services configured\\.",
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Format mappings for display
@@ -94,11 +101,12 @@ async def admin_services_current_handler(update: Update, context: ContextTypes.D
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
+    msg = await query.message.reply_text(
         mappings_text,
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN_V2
     )
+    context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
 async def admin_services_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle service ID editing interface."""
@@ -109,19 +117,22 @@ async def admin_services_edit_handler(update: Update, context: ContextTypes.DEFA
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to access this feature.")
+        msg = await query.message.reply_text("❌ You don't have permission to access this feature.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Get current mappings
     mappings = get_boosting_service_manager().get_current_provider_mappings_summary()
     
     if not mappings:
-        await query.edit_message_text(
+        msg = await query.message.reply_text(
             "❌ *No Service Mappings Found*\n\n"
             "No active boosting services configured\\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Create edit options
@@ -141,11 +152,12 @@ async def admin_services_edit_handler(update: Update, context: ContextTypes.DEFA
         "Select a provider/service combination to edit:"
     )
     
-    await query.edit_message_text(
+    msg = await query.message.reply_text(
         edit_text,
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN_V2
     )
+    context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
 async def admin_edit_specific_service_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle editing of specific service/provider combination."""
@@ -156,14 +168,17 @@ async def admin_edit_specific_service_handler(update: Update, context: ContextTy
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to perform this action.")
+        msg = await query.message.reply_text("❌ You don't have permission to perform this action.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Parse callback data: admin_edit_service_{service_type}_{provider_name}
     match = re.match(r"admin_edit_service_([^_]+)_(.+)", query.data)
     if not match:
-        await query.edit_message_text("❌ Invalid service/provider combination.")
+        msg = await query.message.reply_text("❌ Invalid service/provider combination.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     service_type_str = match.group(1)
@@ -172,17 +187,18 @@ async def admin_edit_specific_service_handler(update: Update, context: ContextTy
     try:
         service_type = ServiceType(service_type_str)
     except ValueError:
-        await query.edit_message_text(f"❌ Invalid service type: {service_type_str}")
+        msg = await query.message.reply_text(f"❌ Invalid service type: {service_type_str}")
         return
     
     # Get current service ID
     current_service_id = get_boosting_service_manager().get_provider_service_id(service_type, provider_name)
     
     if current_service_id is None:
-        await query.edit_message_text(
+        msg = await query.message.reply_text(
             f"❌ No mapping found for {escape_markdown_v2(provider_name)} {service_type.value} service\\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Store editing context in user_data
@@ -207,11 +223,12 @@ async def admin_edit_specific_service_handler(update: Update, context: ContextTy
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
+    msg = await query.message.reply_text(
         edit_text,
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN_V2
     )
+    context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
     
     # Set flag to await new service ID input
     context.user_data["awaiting_service_id_input"] = True
@@ -226,6 +243,7 @@ async def handle_service_id_input(update: Update, context: ContextTypes.DEFAULT_
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
         await update.message.reply_text("❌ You don't have permission to perform this action.")
         return
@@ -315,13 +333,16 @@ async def admin_confirm_service_update_handler(update: Update, context: ContextT
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to perform this action.")
+        msg = await query.message.reply_text("❌ You don't have permission to perform this action.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     pending_update = context.user_data.get("pending_service_update")
     if not pending_update:
-        await query.edit_message_text("❌ No pending update found.")
+        msg = await query.message.reply_text("❌ No pending update found.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     service_id = pending_update["service_id"]
@@ -359,18 +380,20 @@ async def admin_confirm_service_update_handler(update: Update, context: ContextT
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(
+        msg = await query.message.reply_text(
             success_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         
     else:
-        await query.edit_message_text(
+        msg = await query.message.reply_text(
             "❌ *Failed to update service ID*\n\n"
             "A system error occurred\\. Please check the logs and try again\\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
 async def admin_services_audit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show audit log for service changes."""
@@ -381,8 +404,10 @@ async def admin_services_audit_handler(update: Update, context: ContextTypes.DEF
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    await clear_bot_messages(update, context)
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to access this feature.")
+        msg = await query.message.reply_text("❌ You don't have permission to access this feature.")
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Get recent audit entries
@@ -394,12 +419,13 @@ async def admin_services_audit_handler(update: Update, context: ContextTypes.DEF
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(
+        msg = await query.message.reply_text(
             "📋 *Service Audit Log*\n\n"
             "No audit entries found\\.",
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
+        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
     # Format audit log
@@ -431,8 +457,9 @@ async def admin_services_audit_handler(update: Update, context: ContextTypes.DEF
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
+    msg = await query.message.reply_text(
         audit_text,
         reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN_V2
     )
+    context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
