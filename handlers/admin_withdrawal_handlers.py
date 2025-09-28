@@ -25,8 +25,10 @@ async def admin_withdrawals_menu_handler(update: Update, context: ContextTypes.D
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
+    print("Checking admin status for user:", user.id)  # Debug log
+    print("Is admin:", is_admin(user.id))  # Debug log
     if not is_admin(user.id):
-        await query.edit_message_text("❌ You don't have permission to access this menu.")
+        await query.edit_message_reply_markup("❌ You don't have permission to access this menu.")
         return
     
     keyboard = [

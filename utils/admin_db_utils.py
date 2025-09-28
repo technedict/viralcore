@@ -6,6 +6,14 @@ from utils.db_utils import DB_FILE, CUSTOM_DB_FILE, get_connection
 # Admin Helper Functions
 # -------------------------------
 
+def is_admin(user_id: int) -> bool:
+    """Check if a user has admin privileges."""
+    with get_connection(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        return bool(row and row["is_admin"])
+
 def get_all_users() -> List[sqlite3.Row]:
     """Fetch all users from the database."""
     with get_connection(DB_FILE) as conn:
