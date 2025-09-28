@@ -41,6 +41,7 @@ from utils.menu_utils import (
     clear_bot_messages,
     clear_awaiting_flags,
 )
+from utils.admin_db_utils import is_admin as is_user_admin
 from utils.messaging import escape_markdown_v2 # Added for withdrawal handler (escape_markdown_v2 renamed to escape_m
 from handlers.payment_handler import PaymentHandler
 from utils.payment_utils import initiate_flutterwave_transfer # Added for withdrawal handler
@@ -231,7 +232,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Prepare user info
     user_rec = get_user(user_id)
-    is_admin = bool(user_rec and user_rec[4])
+    is_admin = is_user_admin(user_id)
     ph: PaymentHandler = context.bot_data["payment_handler"]
 
     # Clear any one-off awaiting flags at the start of any menu interaction

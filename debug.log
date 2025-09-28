@@ -303,3 +303,81 @@
 {"timestamp": "2025-09-28T18:18:52.025385Z", "level": "INFO", "module": "__main__", "message": "Waiting for shutdown_event from shutdown_manager...", "correlation_id": "none"}
 {"timestamp": "2025-09-28T18:19:46.951232Z", "level": "INFO", "module": "utils.boosting_service_manager", "message": "Updated provider service ID for service 1, provider smmflare: 8646 -> 8647 by admin ***ACCOUNT***", "correlation_id": "none"}
 {"timestamp": "2025-09-28T18:19:59.309580Z", "level": "INFO", "module": "handlers.admin_handlers", "message": "Admin ***ACCOUNT*** accessed main admin panel.", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.062892Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.064186Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Starting graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.065403Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: requesting updater.stop_polling()", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.066523Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: awaiting updater.shutdown()", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.070732Z", "level": "INFO", "module": "__main__", "message": "Starting clean shutdown of Application and background managers...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.073120Z", "level": "INFO", "module": "apscheduler.scheduler", "message": "Scheduler has been shut down", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:25.107485Z", "level": "INFO", "module": "__main__", "message": "Shutdown complete.", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.712366Z", "level": "DEBUG", "module": "asyncio", "message": "Using selector: EpollSelector", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.717791Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Job queue database initialized", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.758192Z", "level": "DEBUG", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: app attached and shutdown_event bound to running loop", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.758595Z", "level": "DEBUG", "module": "utils.graceful_shutdown", "message": "Shutdown event created and bound to running loop", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.759102Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Signal handlers registered for graceful shutdown", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.772430Z", "level": "INFO", "module": "__main__", "message": "Bot is up and running!", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:31.772976Z", "level": "INFO", "module": "__main__", "message": "Performing startup recovery...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.391107Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.392150Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Starting graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.392803Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: requesting updater.stop_polling()", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.393478Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: awaiting updater.shutdown()", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.394265Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: closing telegram HTTP client", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.395428Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Phase 1: Stopping new work acceptance", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.397389Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Shutting down boost manager...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.398094Z", "level": "INFO", "module": "utils.boost_utils", "message": "[BoostManager] Cancelling all active boost tasks.", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.398889Z", "level": "INFO", "module": "utils.boost_utils", "message": "[BoostManager] No active boost tasks to cancel.", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.399497Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Boost manager shutdown complete", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.400400Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "No background tasks to shutdown", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.401057Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Running 1 cleanup callbacks...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.401718Z", "level": "INFO", "module": "__main__", "message": "Performing startup recovery...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.403474Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Phase 5: Cleaning up remaining jobs", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:33.405389Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Graceful shutdown completed successfully", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:35.071377Z", "level": "INFO", "module": "apscheduler.scheduler", "message": "Scheduler started", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:35.072775Z", "level": "DEBUG", "module": "apscheduler.scheduler", "message": "Looking for jobs to run", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:35.073203Z", "level": "DEBUG", "module": "apscheduler.scheduler", "message": "No jobs; waiting until a job is added", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:22:49.272188Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:38.543177Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:38.783891Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:39.050311Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:40.286687Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:40.473634Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:40.718098Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:40.888600Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:41.223143Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:41.249895Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:41.445197Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:41.605572Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:41.832994Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:42.092475Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:42.185626Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:42.400441Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:42.572447Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:42.874103Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:43.144811Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:43.288391Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:43.398729Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:43.571482Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:43.841355Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:44.116792Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:44.270345Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:44.478606Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:23:44.680386Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.347777Z", "level": "DEBUG", "module": "asyncio", "message": "Using selector: EpollSelector", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.373481Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Job queue database initialized", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.731108Z", "level": "DEBUG", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: app attached and shutdown_event bound to running loop", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.732221Z", "level": "DEBUG", "module": "utils.graceful_shutdown", "message": "Shutdown event created and bound to running loop", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.733571Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Signal handlers registered for graceful shutdown", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.783528Z", "level": "INFO", "module": "__main__", "message": "Bot is up and running!", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:16.784960Z", "level": "INFO", "module": "__main__", "message": "Performing startup recovery...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:18.186641Z", "level": "INFO", "module": "apscheduler.scheduler", "message": "Scheduler started", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:18.191432Z", "level": "DEBUG", "module": "apscheduler.scheduler", "message": "Looking for jobs to run", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:18.193162Z", "level": "DEBUG", "module": "apscheduler.scheduler", "message": "No jobs; waiting until a job is added", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:18.495676Z", "level": "INFO", "module": "__main__", "message": "Updater polling started (via app.updater.start_polling()).", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:18.498151Z", "level": "INFO", "module": "__main__", "message": "Waiting for shutdown_event from shutdown_manager...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.253957Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Received signal 2, initiating graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.260291Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Starting graceful shutdown...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.266581Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: requesting updater.stop_polling()", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.280477Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: awaiting updater.shutdown()", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.292921Z", "level": "INFO", "module": "__main__", "message": "Starting clean shutdown of Application and background managers...", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.316806Z", "level": "INFO", "module": "apscheduler.scheduler", "message": "Scheduler has been shut down", "correlation_id": "none"}
+{"timestamp": "2025-09-28T18:24:27.417606Z", "level": "INFO", "module": "__main__", "message": "Shutdown complete.", "correlation_id": "none"}
