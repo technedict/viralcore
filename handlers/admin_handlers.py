@@ -187,6 +187,33 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await admin_withdrawals_menu_handler(update, context)
         return
     
+    elif data.startswith("admin_withdrawal_mode_"):
+        # Delegate to withdrawal mode handlers
+        from handlers.admin_withdrawal_handlers import admin_withdrawal_mode_handler
+        await admin_withdrawal_mode_handler(update, context)
+        return
+    
+    elif data == "admin_withdrawals_stats":
+        # Delegate to withdrawal stats handler
+        from handlers.admin_withdrawal_handlers import admin_withdrawal_stats_handler
+        await admin_withdrawal_stats_handler(update, context)
+        return
+    
+    elif data == "admin_withdrawals_pending":
+        # Delegate to pending withdrawals handler
+        from handlers.admin_withdrawal_handlers import admin_pending_withdrawals_handler
+        await admin_pending_withdrawals_handler(update, context)
+        return
+        
+    elif data.startswith("admin_approve_withdrawal_") or data.startswith("admin_reject_withdrawal_"):
+        # Delegate to approval/rejection handlers
+        from handlers.admin_withdrawal_handlers import admin_approve_withdrawal_handler, admin_reject_withdrawal_handler
+        if data.startswith("admin_approve_withdrawal_"):
+            await admin_approve_withdrawal_handler(update, context)
+        else:
+            await admin_reject_withdrawal_handler(update, context)
+        return
+    
     elif data == "admin_services_menu":
         # Delegate to service handlers
         from handlers.admin_service_handlers import admin_services_menu_handler
@@ -271,33 +298,31 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
-    elif data == "admin_view_reply_guys":
-        users = get_all_reply_guys_ids()
-        if users:
-            header = "<b>All Reply Guys:</b>\n\n"
-            table_header = "<pre>   ID   |  Username  | Amount </pre>\n"
-            table_divider = "<pre>--------|------------|--------</pre>\n"
-            rows = []
-            for user_id in users:
-                amount = get_total_amount(user_id) # Ensure this returns a float/int
-                username = get_username_by_userid(user_id)
-                username_display = (username.title()[:9] + '…') if username and len(username) > 9 else (username.title() if username else "N/A")
-                amount_str = f"₦{amount:.2f}" if amount is not None else "₦0.00"
-
-                row = f"<pre>{user_id:<6} | {username_display:<10} | {amount_str:<6} </pre>\n"
-                rows.append(row)
-            text = header + table_header + table_divider + "".join(rows)
-        else:
-            text = "No Reply Guys found."
-        # FIX: Change callback_data to go back to reply_guys_menu
-        keyboard = [[InlineKeyboardButton("↩️ Back", callback_data="admin_reply_guys_menu")]] # <--- CHANGED THIS LINE
-        await clear_bot_messages(update, context)
-        msg = await query.message.reply_text(
-            text=text,
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+    elif data == "admin_view_reply_guys" or data.startswith("admin_reply_guys_page_"):
+        # Handle pagination
+        page = 1
+        if data.startswith("admin_reply_guys_page_"):
+            try:
+                page = int(data.split("_")[-1])
+            except (ValueError, IndexError):
+                page = 1
+        
+        reply_guys = get_all_reply_guys_ids()
+        
+        # Use pagination utility
+        from utils.admin_pagination import admin_paginator, safe_send_message_or_file
+        
+        message_text, keyboard = admin_paginator.paginate_reply_guys(reply_guys, page)
+        
+        # Send with automatic fallback to CSV if too long
+        await safe_send_message_or_file(
+            update=update,
+            context=context,
+            text=message_text,
+            keyboard=keyboard,
+            file_generator_func=None,  # TODO: Add export function for reply guys if needed
+            filename_prefix="reply_guys_export"
         )
-        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
     elif data == "admin_switch_boost_panel":
         keyboard = [

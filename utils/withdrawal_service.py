@@ -485,6 +485,275 @@ class WithdrawalService:
                 logger.error(f"Failed to reject manual withdrawal {withdrawal_id}: {str(e)}")
                 return False
     
+    def approve_withdrawal_by_mode(self, withdrawal_id: int, admin_id: int, reason: str = None) -> bool:
+        """
+        Approve a withdrawal based on current system mode (idempotent).
+        Reads withdrawal mode from settings at approval time.
+        
+        Args:
+            withdrawal_id: Withdrawal ID to approve
+            admin_id: Admin user ID performing the approval
+            reason: Optional reason for approval
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        # Import here to avoid circular dependency
+        from utils.withdrawal_settings import get_withdrawal_mode, WithdrawalMode
+        
+        # Get current system mode at approval time
+        current_mode = get_withdrawal_mode()
+        
+        with get_connection(DB_FILE) as conn:
+            try:
+                conn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
+                
+                # Get withdrawal with row lock
+                c = conn.cursor()
+                c.execute('''
+                    SELECT * FROM withdrawals 
+                    WHERE id = ?
+                    ORDER BY id FOR UPDATE
+                ''', (withdrawal_id,))
+                
+                row = c.fetchone()
+                if not row:
+                    logger.warning(f"Withdrawal {withdrawal_id} not found")
+                    return False
+                
+                # Convert row to dict
+                columns = [desc[0] for desc in c.description]
+                withdrawal_data = dict(zip(columns, row))
+                withdrawal = Withdrawal.from_dict(withdrawal_data)
+                
+                # Check if already processed (idempotency)
+                if withdrawal.status in [WithdrawalStatus.COMPLETED, WithdrawalStatus.REJECTED]:
+                    logger.info(f"Withdrawal {withdrawal_id} already processed: {withdrawal.status}")
+                    return withdrawal.status == WithdrawalStatus.COMPLETED
+                
+                # Check if withdrawal is in valid state for approval
+                if withdrawal.status != WithdrawalStatus.PENDING:
+                    logger.warning(f"Withdrawal {withdrawal_id} is not in pending state: {withdrawal.status}")
+                    return False
+                
+                # Process based on current mode
+                if current_mode == WithdrawalMode.MANUAL:
+                    return self._approve_withdrawal_manual_mode(withdrawal, admin_id, reason, conn)
+                else:  # AUTOMATIC
+                    return self._approve_withdrawal_automatic_mode(withdrawal, admin_id, reason, conn)
+                    
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to approve withdrawal {withdrawal_id}: {str(e)}")
+                return False
+
+    def _approve_withdrawal_manual_mode(self, withdrawal: Withdrawal, admin_id: int, reason: str, conn) -> bool:
+        """Approve withdrawal in manual mode - deduct balance only, no external API call."""
+        try:
+            # Deduct balance atomically
+            balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
+            success = atomic_withdraw_operation(
+                user_id=withdrawal.user_id,
+                balance_type=balance_type,
+                amount=withdrawal.amount_usd,
+                reason=f"Manual withdrawal approved by admin {admin_id}",
+                operation_id=withdrawal.operation_id
+            )
+            
+            if not success:
+                logger.error(f"Balance deduction failed for withdrawal {withdrawal.id}")
+                return False
+            
+            # Update withdrawal
+            withdrawal.status = WithdrawalStatus.COMPLETED
+            withdrawal.admin_id = admin_id
+            withdrawal.approved_at = datetime.utcnow().isoformat()
+            withdrawal.processed_at = datetime.utcnow().isoformat()
+            withdrawal.updated_at = datetime.utcnow().isoformat()
+            
+            # Save changes
+            self._update_withdrawal_in_transaction(withdrawal, conn)
+            
+            # Log audit event
+            self._log_audit_event_in_transaction(
+                withdrawal_id=withdrawal.id,
+                admin_id=admin_id,
+                action="approved-manual",
+                old_status="pending",
+                new_status="completed",
+                reason=reason,
+                metadata={"mode": "manual", "external_api_called": False},
+                conn=conn
+            )
+            
+            conn.commit()
+            logger.info(f"Withdrawal {withdrawal.id} approved in manual mode by admin {admin_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Manual mode approval failed for withdrawal {withdrawal.id}: {str(e)}")
+            raise
+
+    def _approve_withdrawal_automatic_mode(self, withdrawal: Withdrawal, admin_id: int, reason: str, conn) -> bool:
+        """Approve withdrawal in automatic mode - deduct balance and call Flutterwave API."""
+        try:
+            # First deduct balance atomically
+            balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
+            success = atomic_withdraw_operation(
+                user_id=withdrawal.user_id,
+                balance_type=balance_type,
+                amount=withdrawal.amount_usd,
+                reason=f"Automatic withdrawal approved by admin {admin_id}",
+                operation_id=withdrawal.operation_id
+            )
+            
+            if not success:
+                logger.error(f"Balance deduction failed for withdrawal {withdrawal.id}")
+                return False
+            
+            # Update status to processing
+            withdrawal.status = WithdrawalStatus.PROCESSING
+            withdrawal.admin_id = admin_id
+            withdrawal.approved_at = datetime.utcnow().isoformat()
+            withdrawal.updated_at = datetime.utcnow().isoformat()
+            
+            # Generate reference
+            reference = f"VCW_{withdrawal.id}_{uuid.uuid4().hex[:8]}"
+            withdrawal.flutterwave_reference = reference
+            
+            # Save processing state first
+            self._update_withdrawal_in_transaction(withdrawal, conn)
+            conn.commit()  # Commit the processing state
+            
+            # Now call Flutterwave API (outside transaction)
+            try:
+                response = self.flutterwave_client.initiate_transfer(
+                    amount=withdrawal.amount_ngn,
+                    beneficiary_name=withdrawal.account_name,
+                    account_number=withdrawal.account_number,
+                    account_bank=withdrawal.bank_name,
+                    reference=reference
+                )
+                
+                # Start new transaction for final update
+                with get_connection(DB_FILE) as final_conn:
+                    final_conn.execute('BEGIN IMMEDIATE')
+                    
+                    # Store trace ID
+                    withdrawal.flutterwave_trace_id = response.get('trace_id')
+                    
+                    if response.get('success'):
+                        withdrawal.status = WithdrawalStatus.COMPLETED
+                        withdrawal.processed_at = datetime.utcnow().isoformat()
+                        
+                        self._log_audit_event_in_transaction(
+                            withdrawal_id=withdrawal.id,
+                            admin_id=admin_id,
+                            action="approved-automatic",
+                            old_status="processing",
+                            new_status="completed",
+                            reason=reason,
+                            metadata={
+                                "mode": "automatic",
+                                "external_api_called": True,
+                                "flutterwave_reference": reference,
+                                "trace_id": response.get('trace_id')
+                            },
+                            conn=final_conn
+                        )
+                        
+                        logger.info(f"Withdrawal {withdrawal.id} approved in automatic mode by admin {admin_id}")
+                        
+                    else:
+                        # Flutterwave transfer failed - rollback balance
+                        withdrawal.status = WithdrawalStatus.FAILED
+                        withdrawal.failure_reason = response.get('error', 'Flutterwave transfer failed')
+                        
+                        # Rollback balance deduction
+                        rollback_success = self._rollback_balance_deduction(withdrawal, final_conn)
+                        if not rollback_success:
+                            logger.error(f"Failed to rollback balance for withdrawal {withdrawal.id}")
+                        
+                        self._log_audit_event_in_transaction(
+                            withdrawal_id=withdrawal.id,
+                            admin_id=admin_id,
+                            action="failed-automatic",
+                            old_status="processing",
+                            new_status="failed",
+                            reason=f"Flutterwave API failed: {response.get('error')}",
+                            metadata={
+                                "mode": "automatic",
+                                "external_api_called": True,
+                                "api_error": response.get('error'),
+                                "balance_rolled_back": rollback_success
+                            },
+                            conn=final_conn
+                        )
+                        
+                        logger.error(f"Withdrawal {withdrawal.id} failed in automatic mode: {withdrawal.failure_reason}")
+                    
+                    self._update_withdrawal_in_transaction(withdrawal, final_conn)
+                    final_conn.commit()
+                    
+                    return withdrawal.status == WithdrawalStatus.COMPLETED
+                    
+            except Exception as api_error:
+                # API call failed - rollback balance
+                with get_connection(DB_FILE) as rollback_conn:
+                    rollback_conn.execute('BEGIN IMMEDIATE')
+                    
+                    withdrawal.status = WithdrawalStatus.FAILED
+                    withdrawal.failure_reason = f"API error: {str(api_error)}"
+                    
+                    rollback_success = self._rollback_balance_deduction(withdrawal, rollback_conn)
+                    
+                    self._log_audit_event_in_transaction(
+                        withdrawal_id=withdrawal.id,
+                        admin_id=admin_id,
+                        action="failed-automatic",
+                        old_status="processing",
+                        new_status="failed",
+                        reason=f"API exception: {str(api_error)}",
+                        metadata={
+                            "mode": "automatic",
+                            "external_api_called": False,
+                            "api_exception": str(api_error),
+                            "balance_rolled_back": rollback_success
+                        },
+                        conn=rollback_conn
+                    )
+                    
+                    self._update_withdrawal_in_transaction(withdrawal, rollback_conn)
+                    rollback_conn.commit()
+                    
+                    logger.error(f"Withdrawal {withdrawal.id} failed with API error: {str(api_error)}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Automatic mode approval failed for withdrawal {withdrawal.id}: {str(e)}")
+            raise
+
+    def _rollback_balance_deduction(self, withdrawal: Withdrawal, conn) -> bool:
+        """Rollback balance deduction for failed automatic withdrawal."""
+        try:
+            balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
+            
+            # Add balance back (opposite of withdraw operation)
+            from utils.balance_operations import atomic_deposit_operation
+            success = atomic_deposit_operation(
+                user_id=withdrawal.user_id,
+                balance_type=balance_type,
+                amount=withdrawal.amount_usd,
+                reason=f"Rollback for failed withdrawal {withdrawal.id}",
+                operation_id=f"rollback_{withdrawal.operation_id}"
+            )
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Failed to rollback balance for withdrawal {withdrawal.id}: {str(e)}")
+            return False
+
     def get_withdrawal(self, withdrawal_id: int) -> Optional[Withdrawal]:
         """Get withdrawal by ID."""
         
@@ -499,6 +768,25 @@ class WithdrawalService:
                 return Withdrawal.from_dict(withdrawal_data)
             
             return None
+    
+    def get_pending_withdrawals(self) -> List[Withdrawal]:
+        """Get all pending withdrawals (regardless of payment mode)."""
+        
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT * FROM withdrawals 
+                WHERE status = 'pending'
+                ORDER BY created_at ASC
+            ''')
+            
+            withdrawals = []
+            for row in c.fetchall():
+                columns = [desc[0] for desc in c.description]
+                withdrawal_data = dict(zip(columns, row))
+                withdrawals.append(Withdrawal.from_dict(withdrawal_data))
+            
+            return withdrawals
     
     def get_pending_manual_withdrawals(self) -> List[Withdrawal]:
         """Get all pending manual withdrawals."""
