@@ -29,7 +29,8 @@ from utils.db_utils import (
     mark_transaction_hash_as_processed,
     get_user_x_username, 
 )
-from utils.menu_utils import clear_bot_messages, escape_md # Added escape_md for MarkdownV2
+from utils.menu_utils import clear_bot_messages # Added escape_markdown_v2_v2 for MarkdownV2
+from utils.messaging import escape_markdown_v2 # Added for MarkdownV2 escaping
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +128,10 @@ class PaymentHandler:
         
         payment_instructions_message = (
             f"{display_name} \n\n"
-            f"Send `{escape_md(f'{crypto_amount:.6f}')}` {escape_md(crypto_symbol)} to:\n"
-            f"`{escape_md(addy)}`\n\n"
-            f"Network: *{escape_md(base_crypto.upper())}*\n" # Clearly state the network
-            f"Your order ID: `{escape_md(invoice_id)}`\n\n"
+            f"Send `{escape_markdown_v2(f'{crypto_amount:.6f}')}` {escape_markdown_v2(crypto_symbol)} to:\n"
+            f"`{escape_markdown_v2(addy)}`\n\n"
+            f"Network: *{escape_markdown_v2(base_crypto.upper())}*\n" # Clearly state the network
+            f"Your order ID: `{escape_markdown_v2(invoice_id)}`\n\n"
             f"After sending, please reply with your transaction hash to confirm payment\.\n" # Escaped '.'
             f"_This payment window expires in {self.TX_HASH_TIMEOUT//60} minutes\._" # Escaped '.'
         )
@@ -238,12 +239,12 @@ class PaymentHandler:
 
         bank_instructions_message = (
             f"🏦 *BANK TRANSFER*\n\n"
-            f"Please transfer *₦{escape_md(f'{float(transfer_amount_display)}')}* to the following account:\n\n"
-            f"Bank: `{escape_md(bank_name)}`\n" # Escape bank name
-            f"Account Number: `{escape_md(account_number)}`\n" # Escape account number
-            f"Expires: `{escape_md(expires_str)}`\n\n" # Escape expires string
-            f"Please send the *exact amount*\\.\n\n" # The period here needs manual escape (or ensure escape_md handles it)
-            f"Note: `{escape_md(payment_note)}`\n\n" # Escape the payment note
+            f"Please transfer *₦{escape_markdown_v2(f'{float(transfer_amount_display)}')}* to the following account:\n\n"
+            f"Bank: `{escape_markdown_v2(bank_name)}`\n" # Escape bank name
+            f"Account Number: `{escape_markdown_v2(account_number)}`\n" # Escape account number
+            f"Expires: `{escape_markdown_v2(expires_str)}`\n\n" # Escape expires string
+            f"Please send the *exact amount*\\.\n\n" # The period here needs manual escape (or ensure escape_markdown_v2 handles it)
+            f"Note: `{escape_markdown_v2(payment_note)}`\n\n" # Escape the payment note
             f"You will be notified once payment is confirmed\\." # The period here needs manual escape
         )
         keyboard = InlineKeyboardMarkup([
@@ -305,7 +306,7 @@ class PaymentHandler:
             context.user_data["tx_attempts"] = attempts
             if attempts < 3:
                 await update.message.reply_text(
-                    f"❌ Invalid {escape_md(crypto_type.upper())} transaction hash format\. "
+                    f"❌ Invalid {escape_markdown_v2(crypto_type.upper())} transaction hash format\. "
                     f"Please double-check and resend\. Attempts left: `{3-attempts}`\.",
                     parse_mode='MarkdownV2'
                 )
@@ -368,7 +369,7 @@ class PaymentHandler:
             )
         else:
             error_msg = verification_result.get("message", "Unknown verification error.")
-            await update.message.reply_text(f"❌ Crypto payment verification failed: {escape_md(error_msg)}\n"
+            await update.message.reply_text(f"❌ Crypto payment verification failed: {escape_markdown_v2(error_msg)}\n"
                                              "Please ensure you sent the correct amount to the correct address, "
                                              "and replied with the correct hash\.", parse_mode='MarkdownV2')
             logger.warning(f"Crypto verification failed for user {user_id}, hash {tx_hash}: {error_msg}")
@@ -1022,7 +1023,7 @@ class PaymentHandler:
                 referrer_x_username = get_user_x_username(referrer_id) # Consider if this is always needed or can be optimized
                 referrer_notification_text = (
                     f"💰 Great news! Your referral "
-                    f"[{escape_md(user_username)}](tg://user?id={user_id}) "
+                    f"[{escape_markdown_v2(user_username)}](tg://user?id={user_id}) "
                     f"has made a payment of *${received_amount_usd:.2f}*.\n"
                     f"You earned a bonus of *${referral_bonus:.2f}*!"
                 )
@@ -1037,7 +1038,7 @@ class PaymentHandler:
 
         # --- General payment confirmation to user ---
         await update.effective_chat.send_message(
-            f"✅ Payment confirmed\! Your order `{escape_md(invoice_id)}` has been processed for *${escape_md(str(received_amount_usd))}*",
+            f"✅ Payment confirmed\! Your order `{escape_markdown_v2(invoice_id)}` has been processed for *${escape_markdown_v2(str(received_amount_usd))}*",
             parse_mode='MarkdownV2'
         )
 

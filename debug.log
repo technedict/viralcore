@@ -1,0 +1,5 @@
+{"timestamp": "2025-09-28T15:05:51.247142Z", "level": "DEBUG", "module": "asyncio", "message": "Using selector: EpollSelector", "correlation_id": "none"}
+{"timestamp": "2025-09-28T15:05:51.952635Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Job queue database initialized", "correlation_id": "none"}
+{"timestamp": "2025-09-28T15:05:51.981635Z", "level": "DEBUG", "module": "utils.graceful_shutdown", "message": "GracefulShutdownManager: app attached and shutdown_event bound to running loop", "correlation_id": "none"}
+{"timestamp": "2025-09-28T15:05:51.982061Z", "level": "DEBUG", "module": "utils.graceful_shutdown", "message": "Shutdown event created and bound to running loop", "correlation_id": "none"}
+{"timestamp": "2025-09-28T15:05:51.982626Z", "level": "INFO", "module": "utils.graceful_shutdown", "message": "Signal handlers registered for graceful shutdown", "correlation_id": "none"}

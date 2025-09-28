@@ -11,7 +11,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from utils.boosting_service_manager import get_boosting_service_manager, ServiceType
-from utils.messaging import escape_md
+from utils.messaging import escape_markdown_v2
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ async def admin_services_current_handler(update: Update, context: ContextTypes.D
     for service_type, providers in mappings.items():
         mappings_text += f"**{service_type.title()} Service:**\n"
         for provider_name, service_id in providers.items():
-            mappings_text += f"• {escape_md(provider_name)}: `{service_id}`\n"
+            mappings_text += f"• {escape_markdown_v2(provider_name)}: `{service_id}`\n"
         mappings_text += "\n"
     
     keyboard = [
@@ -180,7 +180,7 @@ async def admin_edit_specific_service_handler(update: Update, context: ContextTy
     
     if current_service_id is None:
         await query.edit_message_text(
-            f"❌ No mapping found for {escape_md(provider_name)} {service_type.value} service\\.",
+            f"❌ No mapping found for {escape_markdown_v2(provider_name)} {service_type.value} service\\.",
             parse_mode=ParseMode.MARKDOWN_V2
         )
         return
@@ -193,9 +193,9 @@ async def admin_edit_specific_service_handler(update: Update, context: ContextTy
     }
     
     edit_text = (
-        f"📝 *Edit {escape_md(provider_name)} {service_type.value.title()} Service ID*\n\n"
+        f"📝 *Edit {escape_markdown_v2(provider_name)} {service_type.value.title()} Service ID*\n\n"
         f"**Current Configuration:**\n"
-        f"• Provider: {escape_md(provider_name)}\n"
+        f"• Provider: {escape_markdown_v2(provider_name)}\n"
         f"• Service Type: {service_type.value.title()}\n"
         f"• Current Service ID: `{current_service_id}`\n\n"
         f"**Please send the new service ID:**\n"
@@ -273,7 +273,7 @@ async def handle_service_id_input(update: Update, context: ContextTypes.DEFAULT_
     confirmation_text = (
         f"⚠️ *Confirm Service ID Change*\n\n"
         f"**Details:**\n"
-        f"• Provider: {escape_md(provider_name)}\n"
+        f"• Provider: {escape_markdown_v2(provider_name)}\n"
         f"• Service Type: {service_type.value.title()}\n"
         f"• Previous ID: `{current_service_id}`\n"
         f"• New ID: `{new_service_id}`\n\n"
@@ -346,7 +346,7 @@ async def admin_confirm_service_update_handler(update: Update, context: ContextT
         success_text = (
             f"✅ *Service ID Updated Successfully\\!*\n\n"
             f"**Updated Configuration:**\n"
-            f"• Provider: {escape_md(provider_name)}\n"
+            f"• Provider: {escape_markdown_v2(provider_name)}\n"
             f"• Service Type: {service_type.title()}\n"
             f"• New Service ID: `{new_service_id}`\n\n"
             f"The change has been logged in the audit trail\\."
@@ -410,15 +410,15 @@ async def admin_services_audit_handler(update: Update, context: ContextTypes.DEF
         created_at = entry['created_at'][:19].replace('T', ' ')
         
         audit_text += (
-            f"**{entry['action'].title()}** by {escape_md(admin_name)}\n"
-            f"• Date: {escape_md(created_at)}\n"
+            f"**{entry['action'].title()}** by {escape_markdown_v2(admin_name)}\n"
+            f"• Date: {escape_markdown_v2(created_at)}\n"
         )
         
         if entry['old_provider_service_id'] and entry['new_provider_service_id']:
             audit_text += f"• Change: `{entry['old_provider_service_id']}` → `{entry['new_provider_service_id']}`\n"
         
         if entry['reason']:
-            audit_text += f"• Reason: {escape_md(entry['reason'])}\n"
+            audit_text += f"• Reason: {escape_markdown_v2(entry['reason'])}\n"
         
         audit_text += "\n"
     

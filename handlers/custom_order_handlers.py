@@ -10,7 +10,8 @@ from fuzzywuzzy import process
 
 # Assuming these imports are correct based on your project structure
 from utils.db_utils import update_purchase_x_username, get_user
-from utils.menu_utils import clear_bot_messages, escape_md, main_menu_keyboard # MODIFIED: Import main_menu_keyboard
+from utils.menu_utils import clear_bot_messages, main_menu_keyboard # MODIFIED: Import main_menu_keyboard
+from utils.messaging import escape_markdown_v2
 from utils.config import APIConfig # Import APIConfig to access ADMIN_IDS
 from utils.payment_utils import initiate_flutterwave_transfer, get_usd_to_ngn_rate
 from utils.notification import notify_admin # NEW: Import the admin notification utility
@@ -47,14 +48,14 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         update_purchase_x_username(user_id, xuser)
         if context.user_data.pop("awaiting_tg_username", None):
             await update.message.reply_text(
-                f"✅ TG username set to @{escape_md(xuser)}\!\n\n"
+                f"✅ TG username set to @{escape_markdown_v2(xuser)}\!\n\n"
                 "Now you can submit your link with /submitlink or paste it here\.",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             return
         else:
             await update.message.reply_text(
-                f"✅ X username set to @{escape_md(xuser)}\!\n\n"
+                f"✅ X username set to @{escape_markdown_v2(xuser)}\!\n\n"
                 "Now you can submit your link with /submitlink or paste it here\.",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
@@ -120,14 +121,14 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             if response_text:
                 await clear_bot_messages(update, context)
                 await update.message.reply_text(
-                    text=escape_md(response_text),
+                    text=escape_markdown_v2(response_text),
                     reply_markup=InlineKeyboardMarkup(response_keyboard),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
             return
 
         except ValueError as e:
-            await update.message.reply_text(f"❌ Invalid quantity: {escape_md(str(e))}. Please enter a whole number.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(f"❌ Invalid quantity: {escape_markdown_v2(str(e))}. Please enter a whole number.", parse_mode=ParseMode.MARKDOWN_V2)
             return
         except Exception as e:
             logger.exception(f"Error processing custom quantity for user {user_id}: {e}")
@@ -194,7 +195,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             admin_message = (
                 f"🚀 *New X Poll Order!* 🚀\n\n"
                 f"👤 User: {update.effective_user.mention_markdown_v2()} (ID: `{user_id}`)\n"
-                f"🔗 Poll Link: `{escape_md(x_poll_link)}`\n"
+                f"🔗 Poll Link: `{escape_markdown_v2(x_poll_link)}`\n"
                 f"🔢 Option Number: `{option_number}`\n"
                 f"📦 Quantity: `{ordered_quantity}` votes\n"
                 f"💰 Total Cost: `${total_cost:.2f}`\n\n"
@@ -241,7 +242,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         admin_message = (
             f"🚀 *New Direct Add Followers Order!* 🚀\n\n"
             f"👤 User: {update.effective_user.mention_markdown_v2()} (ID: `{user_id}`)\n"
-            f"🔗 X Profile Link: `{escape_md(x_profile_link)}`\n"
+            f"🔗 X Profile Link: `{escape_markdown_v2(x_profile_link)}`\n"
             f"📦 Quantity: `{ordered_quantity}` followers\n"
             f"💰 Total Cost: `${total_cost:.2f}`\n\n"
             f"Status: *Paid (Manual Process Required)*"
@@ -293,7 +294,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             admin_message = (
                 f"🚀 *New Slow Push Followers Order!* 🚀\n\n"
                 f"👤 User: {update.effective_user.mention_markdown_v2()} (ID: `{user_id}`)\n"
-                f"🔗 X Profile Link: `{escape_md(user_profile_link)}`\n"
+                f"🔗 X Profile Link: `{escape_markdown_v2(user_profile_link)}`\n"
                 f"📦 Quantity: `{ordered_quantity}` followers\n"
                 f"📅 Over Days: `{num_days}` days\n"
                 f"💰 Total Cost: `${total_cost:.2f}`\n\n"
@@ -327,15 +328,15 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         admin_message = (
             f" *NEW MEMBERS REQUEST!* \n\n"
-            f"Amount: {escape_md(str(members_amount))}\n"
-            f"Channel Name: {escape_md(channel)}\n"
-            f"Requested by: [{escape_md(user_first_name)}](tg://user?id={user_id})"
-            f"{f' \\(@{escape_md(user_username)}\\)' if user_username else ''}\n"
+            f"Amount: {escape_markdown_v2(str(members_amount))}\n"
+            f"Channel Name: {escape_markdown_v2(channel)}\n"
+            f"Requested by: [{escape_markdown_v2(user_first_name)}](tg://user?id={user_id})"
+            f"{f' \\(@{escape_markdown_v2(user_username)}\\)' if user_username else ''}\n"
         )
         await notify_admin(user_id, admin_message) # Using the centralized notify_admin
 
         reply_text = (
-            f"✅ Your request for {escape_md(str(members_amount))} MEMBERS has been sent and "
+            f"✅ Your request for {escape_markdown_v2(str(members_amount))} MEMBERS has been sent and "
             "is being processed"
         )
         await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
@@ -363,7 +364,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             if qnty_requested > balance_usd:
                 raise ValueError(f"You requested ${qnty_requested:.2f}, but you only have ${balance_usd:.2f}. You exceeded the available amount.")
         except ValueError as e:
-            await update.message.reply_text(f"❌ Invalid quantity: {escape_md(str(e))}", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(f"❌ Invalid quantity: {escape_markdown_v2(str(e))}", parse_mode=ParseMode.MARKDOWN_V2)
             return
         
         # --- FIX STARTS HERE ---
@@ -523,13 +524,13 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             
             else:  # Manual processing
                 # Notify admin for manual approval
-                escaped_bank_details_for_display = escape_md(bank_details_raw_input)
+                escaped_bank_details_for_display = escape_markdown_v2(bank_details_raw_input)
                 
                 admin_approval_message = (
                     f"🔔 *NEW MANUAL WITHDRAWAL REQUEST\\!* 🔔\n\n"
-                    f"User: [{escape_md(user_first_name)}](tg://user?id={user_id})"
-                    f"{f' \\(@{escape_md(user_username)}\\)' if user_username else ''}\n"
-                    f"Withdrawal Type: {escape_md('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
+                    f"User: [{escape_markdown_v2(user_first_name)}](tg://user?id={user_id})"
+                    f"{f' \\(@{escape_markdown_v2(user_username)}\\)' if user_username else ''}\n"
+                    f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                     f"Bank Details:\n`{escaped_bank_details_for_display}`\n\n"
                     f"Request ID: `{withdrawal.id}`\n\n"
@@ -631,7 +632,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 if day_of_week in valid_days:
                     # If an exact match, use it directly
                     final_day_of_week = day_of_week
-                    escaped_day = escape_md(final_day_of_week)
+                    escaped_day = escape_markdown_v2(final_day_of_week)
                     await update.message.reply_text(f"✅ Understood\\. You selected *{escaped_day}*\\.", parse_mode=ParseMode.MARKDOWN_V2)
                 else:
                     # If not an exact match, try fuzzy matching
@@ -639,8 +640,8 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
                     if score >= similarity_threshold:
                         # If a close enough match is found, automatically use it
-                        original_input_escaped = escape_md(input_day_str) # Escape the *original* input
-                        corrected_day_escaped = escape_md(closest_match)
+                        original_input_escaped = escape_markdown_v2(input_day_str) # Escape the *original* input
+                        corrected_day_escaped = escape_markdown_v2(closest_match)
 
                         await update.message.reply_text(
                             f"💡 I didn't recognize '{original_input_escaped}'\\. Assuming you meant *{corrected_day_escaped}*\\.\n\n"
@@ -673,10 +674,10 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
                 admin_approval_message = (
                     f"🔔 *NEW REPLIES ORDER REQUEST AWAITING APPROVAL\!* 🔔\n\n"
-                    f"User: [{escape_md(user_first_name)}](tg://user?id={user_id})"
-                    f"{f' \\(@{escape_md(user_username)}\\)' if user_username else ''}\n"
+                    f"User: [{escape_markdown_v2(user_first_name)}](tg://user?id={user_id})"
+                    f"{f' \\(@{escape_markdown_v2(user_username)}\\)' if user_username else ''}\n"
                     f"Requested Replies: *{num_replies}*\n"
-                    f"Day of Week: *{escape_md(final_day_of_week)}*\n\n" # Escape this too
+                    f"Day of Week: *{escape_markdown_v2(final_day_of_week)}*\n\n" # Escape this too
                     f"Request ID: `{request_id}`\n\n"
                     f"Click 'Approve' to add this order to the user's database\."
                 )
@@ -689,7 +690,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 await notify_admin(user_id, admin_approval_message, reply_markup=approval_keyboard)
 
                 await update.message.reply_text(
-                    f"✅ Your replies order request for *{num_replies} replies on {escape_md(final_day_of_week)}* " # Escape
+                    f"✅ Your replies order request for *{num_replies} replies on {escape_markdown_v2(final_day_of_week)}* " # Escape
                     "has been submitted and is awaiting admin approval\\. We will notify you once it's processed\\."
                     , parse_mode=ParseMode.MARKDOWN_V2
                 )

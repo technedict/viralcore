@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackContext
 from utils.boost_utils import BoostManager
 from utils.notification import notify_admin
-from utils.menu_utils import escape_md
+from utils.messaging import escape_markdown_v2
 
 from settings.bot_settings import (
     COMMENT_GROUP_IDS,
@@ -179,7 +179,7 @@ async def handle_awaiting_x_poll_details(update: Update, context: ContextTypes.D
             admin_message = (
                 f"🚀 *New X Poll Order\!* 🚀\n\n"
                 f"👤 User: {update.effective_user.mention_markdown_v2()} \(ID: `{user_id}`\)\n"
-                f"🔗 Poll Link: `{escape_md(x_poll_link)}`\n"
+                f"🔗 Poll Link: `{escape_markdown_v2(x_poll_link)}`\n"
                 f"🔢 Option Number: `{option_number}`\n"
                 f"📦 Quantity: `{ordered_quantity}` votes\n"
                 f"Status: *Paid \(Manual Process Required\)*"
@@ -505,7 +505,7 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
 
     # Build message text
     link = pending["telegram_link"]
-    link = escape_md(link)
+    link = escape_markdown_v2(link)
     message_text = (
         "🚨 New Telegram Post 🚨\n\n"
         f"🔗 {link}\n\n"

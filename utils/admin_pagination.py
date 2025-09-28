@@ -12,7 +12,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 
-from utils.menu_utils import clear_bot_messages, escape_md
+from utils.menu_utils import clear_bot_messages
 from utils.db_utils import get_user, get_user_metrics
 from utils.admin_db_utils import get_all_users, get_all_payments
 

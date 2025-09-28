@@ -40,8 +40,8 @@ from utils.menu_utils import (
     main_menu_keyboard,
     clear_bot_messages,
     clear_awaiting_flags,
-    escape_md
 )
+from utils.messaging import escape_markdown_v2 # Added for withdrawal handler (escape_markdown_v2 renamed to escape_m
 from handlers.payment_handler import PaymentHandler
 from utils.payment_utils import initiate_flutterwave_transfer # Added for withdrawal handler
 
@@ -282,7 +282,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if referrer_info:
             referrer_id = referrer_info[0]
             referrer_username = referrer_info[1] if referrer_info[1] else "No username"
-            referrer_msg = f"Your referrer: [{escape_md(referrer_username)}](tg://user?id={referrer_id})."
+            referrer_msg = f"Your referrer: [{escape_markdown_v2(referrer_username)}](tg://user?id={referrer_id})."
         else:
             referrer_msg = "You don't currently have a referrer."
 
@@ -368,8 +368,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             f"ℹ️ *Support*\n\n"
             f"If you have any questions or encounter issues, please contact our support team:\n"
-            f"- Telegram Channel: [Our Support Channel]({escape_md(support_channel_link)})\n"
-            f"- Direct Admin: {escape_md(support_admin_username)}\n\n"
+            f"- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
+            f"- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
             f"We are here to help you!"
         )
         reply_keyboard = [
@@ -946,7 +946,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- Final Message Rendering ---
     img_path = APIConfig.SLIDE_IMAGES.get(current_slide_key)
     await clear_bot_messages(update, context)
-    reply_text_content = escape_md(reply_text_content)
+    reply_text_content = escape_markdown_v2(reply_text_content)
 
     try:
         if img_path and os.path.isfile(img_path):
@@ -1036,12 +1036,12 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
     user_message_id = withdrawal_data["user_message_id"] # Message ID to reply to the user's initial request
 
     # Escape all dynamic strings for MarkdownV2 before use in messages
-    escaped_user_first_name = escape_md(user_first_name)
-    escaped_user_username = escape_md(user_username) if user_username else None
-    escaped_bank_details = escape_md(bank_details_raw)
-    escaped_account_name = escape_md(account_name)
-    escaped_account_number = escape_md(account_number)
-    escaped_bank_name = escape_md(bank_name)
+    escaped_user_first_name = escape_markdown_v2(user_first_name)
+    escaped_user_username = escape_markdown_v2(user_username) if user_username else None
+    escaped_bank_details = escape_markdown_v2(bank_details_raw)
+    escaped_account_name = escape_markdown_v2(account_name)
+    escaped_account_number = escape_markdown_v2(account_number)
+    escaped_bank_name = escape_markdown_v2(bank_name)
 
 
     if action_type == "approve_withdrawal_":
@@ -1073,7 +1073,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                         validation_error_message = (
                             f"❌ *WITHDRAWAL VALIDATION FAILED\\!*\n\n"
                             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
-                            f"Error: {escape_md(error_msg)}\n"
+                            f"Error: {escape_markdown_v2(error_msg)}\n"
                             f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
                             f"The Flutterwave transfer was successful but balance update failed\\. "
                             f"Manual intervention may be required\\."
@@ -1103,7 +1103,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                         balance_error_message = (
                             f"❌ *BALANCE UPDATE FAILED\\!*\n\n"
                             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
-                            f"Balance Type: {escape_md(balance_type.title())}\n"
+                            f"Balance Type: {escape_markdown_v2(balance_type.title())}\n"
                             f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
                             f"The Flutterwave transfer was successful but balance update failed\\. "
                             f"Manual intervention required\\."
@@ -1140,7 +1140,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
 
 
                 # Notify the user
-                escaped_withdrawal_amount = escape_md(str(withdrawal_amount_ngn)) # Ensure amount is escaped for MarkdownV2
+                escaped_withdrawal_amount = escape_markdown_v2(str(withdrawal_amount_ngn)) # Ensure amount is escaped for MarkdownV2
                 user_confirmation_message = (
                     f"Your withdrawal request for *₦{escaped_withdrawal_amount}* has been successfully processed "
                     f"and the funds have been transferred to your bank account\n\n"
@@ -1167,7 +1167,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                     f"✅ *WITHDRAWAL APPROVED & PROCESSED\!* ✅\n\n" # ##### MODIFICATION: Escaped '!'
                     f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
                     f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
-                    f"Withdrawal Type: {escape_md('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
+                    f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*"
                     f"{f' \\(~\\${withdrawal_amount_usd:,.2f}\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
                     f"Bank Details:\n`{escaped_bank_details}`\n\n"
@@ -1209,7 +1209,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                     f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                     f"Details:\n`{escaped_bank_details}`\n\n"
-                    f"Error: {escape_md(transfer_response.get('message', 'Unknown error'))}\n"
+                    f"Error: {escape_markdown_v2(transfer_response.get('message', 'Unknown error'))}\n"
                     f"Trace ID: `{trace_id}`\n\n"
                     f"Please investigate and manually process or contact Flutterwave support\\."
                 )
@@ -1218,7 +1218,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
 
                 # User-friendly notification
                 user_failed_notification = (
-                    f"⚠️ {escape_md(user_error_msg)}\n\n"
+                    f"⚠️ {escape_markdown_v2(user_error_msg)}\n\n"
                     f"Your withdrawal request reference: `{request_id}`\n\n"
                     f"We apologize for the inconvenience\\."
                 )
@@ -1239,7 +1239,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                 f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
                 f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                 f"Details:\n`{escaped_bank_details}`\n\n"
-                f"Error: {escape_md(str(e))}\n\n" # ##### MODIFICATION: Escape error message
+                f"Error: {escape_markdown_v2(str(e))}\n\n" # ##### MODIFICATION: Escape error message
                 f"Please investigate manually\." # ##### MODIFICATION: Escaped '.'
             )
             await query.edit_message_text(error_message_admin, reply_markup=None, parse_mode='MarkdownV2')
@@ -1283,7 +1283,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
             f"❌ *WITHDRAWAL REJECTED\!* ❌\n\n" # ##### MODIFICATION: Escaped '!'
             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
             f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
-            f"Withdrawal Type: {escape_md('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
+            f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
             f"Amount: *₦{int(withdrawal_amount_ngn)}*"
             f"{f' \\(~\\${withdrawal_amount_usd:,.2f}\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
             f"Bank Details:\n`{escaped_bank_details}`\n\n"
@@ -1346,8 +1346,8 @@ async def handle_replies_approval(update: Update, context: ContextTypes.DEFAULT_
             context.bot_data["pending_replies_orders"] = pending_replies_orders # Save updated dict
 
             # Update admin message
-            escaped_user_first_name = escape_md(user_first_name)
-            escaped_user_username = escape_md(user_username) if user_username else None
+            escaped_user_first_name = escape_markdown_v2(user_first_name)
+            escaped_user_username = escape_markdown_v2(user_username) if user_username else None
 
             await query.edit_message_text(
                 f"✅ Replies order request ID `{request_id}` approved and *added to user's database* for user "
@@ -1379,8 +1379,8 @@ async def handle_replies_approval(update: Update, context: ContextTypes.DEFAULT_
         del pending_replies_orders[request_id]
         context.bot_data["pending_replies_orders"] = pending_replies_orders # Save updated dict
 
-        escaped_user_first_name = escape_md(user_first_name)
-        escaped_user_username = escape_md(user_username) if user_username else None
+        escaped_user_first_name = escape_markdown_v2(user_first_name)
+        escaped_user_username = escape_markdown_v2(user_username) if user_username else None
 
         # Update admin message
         await query.edit_message_text(

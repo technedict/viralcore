@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 
 from utils.withdrawal_service import get_withdrawal_service, PaymentMode, AdminApprovalState, WithdrawalStatus
 from utils.notification import notify_admin
-from utils.messaging import escape_md
+from utils.messaging import escape_markdown_v2
 
 logger = logging.getLogger(__name__)
 
@@ -94,15 +94,15 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         f"💰 *Manual Withdrawal Request*\n\n"
         f"📋 **Details:**\n"
         f"• Request ID: `{withdrawal.id}`\n"
-        f"• User: [{escape_md(username)}](tg://user?id={withdrawal.user_id})\n"
+        f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
         f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
-        f"• Type: {escape_md('Affiliate' if withdrawal.is_affiliate_withdrawal else 'Standard')}\n"
-        f"• Created: {escape_md(withdrawal.created_at[:19].replace('T', ' '))}\n\n"
+        f"• Type: {escape_markdown_v2('Affiliate' if withdrawal.is_affiliate_withdrawal else 'Standard')}\n"
+        f"• Created: {escape_markdown_v2(withdrawal.created_at[:19].replace('T', ' '))}\n\n"
         f"🏦 **Bank Details:**\n"
-        f"• Name: {escape_md(withdrawal.account_name)}\n"
+        f"• Name: {escape_markdown_v2(withdrawal.account_name)}\n"
         f"• Number: `{withdrawal.account_number}`\n"
-        f"• Bank: {escape_md(withdrawal.bank_name)}\n\n"
-        f"**Raw Details:**\n`{escape_md(withdrawal.bank_details_raw)}`\n\n"
+        f"• Bank: {escape_markdown_v2(withdrawal.bank_name)}\n\n"
+        f"**Raw Details:**\n`{escape_markdown_v2(withdrawal.bank_details_raw)}`\n\n"
         f"Remaining requests: {len(pending_withdrawals)}"
     )
     
@@ -178,7 +178,7 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
             f"✅ *Withdrawal Approved Successfully\\!*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
-            f"• User: [{escape_md(username)}](tg://user?id={withdrawal.user_id})\n"
+            f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
             f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
             f"• Balance deducted successfully\n"
             f"• User will be notified"
@@ -262,7 +262,7 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
             f"❌ *Withdrawal Rejected*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
-            f"• User: [{escape_md(username)}](tg://user?id={withdrawal.user_id})\n"
+            f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
             f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
             f"• Status: Rejected\n"
             f"• User will be notified"
