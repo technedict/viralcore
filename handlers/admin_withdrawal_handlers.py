@@ -16,8 +16,8 @@ from utils.messaging import escape_markdown_v2
 
 logger = logging.getLogger(__name__)
 
-async def admin_withdrawals_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle admin withdrawals menu."""
+async def admin_withdrawal_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle withdrawal mode switching."""
     query = update.callback_query
     await query.answer()
     
@@ -25,24 +25,88 @@ async def admin_withdrawals_menu_handler(update: Update, context: ContextTypes.D
     
     # Check if user is admin
     from utils.admin_db_utils import is_admin
-    print("Checking admin status for user:", user.id)  # Debug log
-    print("Is admin:", is_admin(user.id))  # Debug log
     if not is_admin(user.id):
-        await query.edit_message_reply_markup("❌ You don't have permission to access this menu.")
+        await query.edit_message_text("❌ You don't have permission to change withdrawal mode.")
         return
     
+    # Determine which mode to set
+    if query.data == "admin_withdrawal_mode_manual":
+        from utils.withdrawal_settings import WithdrawalMode, set_withdrawal_mode
+        mode = WithdrawalMode.MANUAL
+        mode_name = "Manual"
+        mode_description = "Admin approval required for all withdrawals"
+    elif query.data == "admin_withdrawal_mode_automatic":
+        from utils.withdrawal_settings import WithdrawalMode, set_withdrawal_mode
+        mode = WithdrawalMode.AUTOMATIC
+        mode_name = "Automatic"
+        mode_description = "Withdrawals processed automatically via Flutterwave API"
+    else:
+        await query.edit_message_text("❌ Invalid mode selection.")
+        return
+    
+    # Set the mode
+    success = set_withdrawal_mode(mode, user.id)
+    
+    if success:
+        success_text = (
+            f"✅ *Withdrawal Mode Updated*\n\n"
+            f"**New Mode:** {mode_name}\n"
+            f"**Description:** {mode_description}\n\n"
+            f"This change will affect all future withdrawal requests\\."
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Back to Withdrawal Management", callback_data="admin_withdrawals_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            success_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+        
+        # Log the mode change
+        logger.info(f"Admin {user.id} ({user.username or user.first_name}) changed withdrawal mode to {mode.value}")
+        
+    else:
+        await query.edit_message_text(
+            "❌ *Failed to update withdrawal mode*\n\n"
+            "A system error occurred\\. Please check the logs and try again\\.",
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+
+async def admin_withdrawals_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle admin withdrawals menu with exactly 3 buttons as required."""
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    
+    # Check if user is admin
+    from utils.admin_db_utils import is_admin
+    if not is_admin(user.id):
+        await query.edit_message_text("❌ You don't have permission to access this menu.")
+        return
+    
+    # Get current withdrawal mode
+    from utils.withdrawal_settings import get_withdrawal_mode_display
+    current_mode = get_withdrawal_mode_display()
+    
+    # Exactly 3 buttons as required by specification
     keyboard = [
-        [InlineKeyboardButton("📋 Pending Manual Withdrawals", callback_data="admin_withdrawals_pending")],
+        [InlineKeyboardButton("🔧 Manual Withdrawal Mode", callback_data="admin_withdrawal_mode_manual")],
+        [InlineKeyboardButton("⚡ Automatic Withdrawal Mode", callback_data="admin_withdrawal_mode_automatic")],
         [InlineKeyboardButton("📊 Withdrawal Statistics", callback_data="admin_withdrawals_stats")],
-        [InlineKeyboardButton("🔍 Search Withdrawals", callback_data="admin_withdrawals_search")],
         [InlineKeyboardButton("⬅️ Back to Admin Panel", callback_data="admin_panel")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     menu_text = (
-        "🏦 *Admin Withdrawals Management*\n\n"
-        "Select an option to manage withdrawal requests:"
+        f"🏦 *Withdrawal Management*\n\n"
+        f"**Current Mode:**\n{current_mode}\n\n"
+        f"Select an option:"
     )
     
     await query.edit_message_text(
@@ -52,7 +116,7 @@ async def admin_withdrawals_menu_handler(update: Update, context: ContextTypes.D
     )
 
 async def admin_pending_withdrawals_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle pending manual withdrawals view."""
+    """Handle pending withdrawals view (for admin approval regardless of mode)."""
     query = update.callback_query
     await query.answer()
     
@@ -64,8 +128,8 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         await query.edit_message_text("❌ You don't have permission to access this feature.")
         return
     
-    # Get pending manual withdrawals
-    pending_withdrawals = get_withdrawal_service().get_pending_manual_withdrawals()
+    # Get all pending withdrawals
+    pending_withdrawals = get_withdrawal_service().get_pending_withdrawals()
     
     if not pending_withdrawals:
         keyboard = [
@@ -74,8 +138,8 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            "✅ *No Pending Manual Withdrawals*\n\n"
-            "All manual withdrawal requests have been processed\\.",
+            "✅ *No Pending Withdrawals*\n\n"
+            "All withdrawal requests have been processed\\.",
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
@@ -92,8 +156,12 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         user_row = c.fetchone()
         username = user_row[0] if user_row else f"User_{withdrawal.user_id}"
     
+    # Get current withdrawal mode for display
+    from utils.withdrawal_settings import get_withdrawal_mode_display
+    current_mode = get_withdrawal_mode_display()
+    
     withdrawal_text = (
-        f"💰 *Manual Withdrawal Request*\n\n"
+        f"💰 *Withdrawal Request*\n\n"
         f"📋 **Details:**\n"
         f"• Request ID: `{withdrawal.id}`\n"
         f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
@@ -104,6 +172,7 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         f"• Name: {escape_markdown_v2(withdrawal.account_name)}\n"
         f"• Number: `{withdrawal.account_number}`\n"
         f"• Bank: {escape_markdown_v2(withdrawal.bank_name)}\n\n"
+        f"**Current Mode:** {current_mode}\n\n"
         f"**Raw Details:**\n`{escape_markdown_v2(withdrawal.bank_details_raw)}`\n\n"
         f"Remaining requests: {len(pending_withdrawals)}"
     )
@@ -160,8 +229,8 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
         await query.edit_message_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\).", parse_mode=ParseMode.MARKDOWN_V2)
         return
     
-    # Approve the withdrawal
-    success = get_withdrawal_service().approve_manual_withdrawal(
+    # Approve the withdrawal using unified method based on current mode  
+    success = get_withdrawal_service().approve_withdrawal_by_mode(
         withdrawal_id=withdrawal_id,
         admin_id=user.id,
         reason=f"Approved by admin {user.username or user.first_name}"
@@ -359,10 +428,11 @@ async def admin_withdrawal_stats_handler(update: Update, context: ContextTypes.D
     )
     
     keyboard = [
+        [InlineKeyboardButton("📋 View Pending Requests", callback_data="admin_withdrawals_pending")] if pending_manual > 0 else [],
         [InlineKeyboardButton("🔄 Refresh Stats", callback_data="admin_withdrawals_stats")],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="admin_withdrawals_menu")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = InlineKeyboardMarkup([row for row in keyboard if row])  # Filter empty rows
     
     await query.edit_message_text(
         stats_text,

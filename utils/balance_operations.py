@@ -221,6 +221,39 @@ def atomic_withdraw_operation(
         operation_id=operation_id
     )
 
+def atomic_deposit_operation(
+    user_id: int,
+    balance_type: BalanceType,
+    amount: float,
+    reason: str = "Deposit",
+    operation_id: Optional[str] = None
+) -> bool:
+    """
+    Perform atomic deposit operation.
+    
+    Args:
+        user_id: User ID
+        balance_type: "affiliate" or "reply"
+        amount: Positive amount to deposit
+        reason: Deposit reason
+        operation_id: Optional operation ID for idempotency
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if amount <= 0:
+        logger.error("Deposit amount must be positive")
+        return False
+    
+    return atomic_balance_update(
+        user_id=user_id,
+        balance_type=balance_type,
+        amount=amount,  # Positive for deposit
+        operation_type="deposit",
+        reason=reason,
+        operation_id=operation_id
+    )
+
 def get_balance_safely(user_id: int, balance_type: BalanceType) -> float:
     """
     Get balance with proper error handling.

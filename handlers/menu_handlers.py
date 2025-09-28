@@ -223,6 +223,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     user_id = query.from_user.id
+    username = query.from_user.username or ""
+
+    # Ensure user exists in database (create if not exists with proper defaults)
+    from utils.db_utils import create_user
+    create_user(user_id, username)
 
     # Prepare user info
     user_rec = get_user(user_id)

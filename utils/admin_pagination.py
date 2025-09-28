@@ -179,6 +179,70 @@ class AdminPaginator:
         keyboard.append([InlineKeyboardButton("↩️ Back", callback_data="admin_payments_menu")])
         
         return message_text, InlineKeyboardMarkup(keyboard)
+    
+    def paginate_reply_guys(self, reply_guys: List[int], page: int = 1) -> Tuple[str, InlineKeyboardMarkup]:
+        """
+        Paginate reply guys list and return formatted message with navigation.
+        
+        Args:
+            reply_guys: List of reply guy user IDs
+            page: Current page number (1-based)
+        
+        Returns:
+            Tuple of (message_text, keyboard_markup)
+        """
+        if not reply_guys:
+            return "No reply guys found.", InlineKeyboardMarkup([[
+                InlineKeyboardButton("↩️ Back", callback_data="admin_reply_guys_menu")
+            ]])
+
+        total_reply_guys = len(reply_guys)
+        total_pages = (total_reply_guys + self.page_size - 1) // self.page_size
+        page = max(1, min(page, total_pages))  # Clamp page to valid range
+        
+        start_idx = (page - 1) * self.page_size
+        end_idx = min(start_idx + self.page_size, total_reply_guys)
+        page_reply_guys = reply_guys[start_idx:end_idx]
+        
+        # Build message
+        header = f"<b>Reply Guys (Page {page}/{total_pages}, {total_reply_guys} total):</b>\n\n"
+        table_header = "<pre>   ID   |  Username  | Amount </pre>\n"
+        table_divider = "<pre>--------|------------|--------</pre>\n"
+        
+        rows = []
+        for user_id in page_reply_guys:
+            try:
+                from ViralMonitor.utils.db import get_total_amount, get_username_by_userid
+                amount = get_total_amount(user_id)
+                username = get_username_by_userid(user_id)
+                username_display = (username.title()[:9] + '…') if username and len(username) > 9 else (username.title() if username else "N/A")
+                amount_str = f"₦{amount:.2f}" if amount is not None else "₦0.00"
+
+                row = f"<pre>{user_id:<6} | {username_display:<10} | {amount_str:<6} </pre>\n"
+                rows.append(row)
+            except Exception as e:
+                logger.error(f"Error getting reply guy data for user {user_id}: {e}")
+                rows.append(f"<pre>{user_id:<6} | {'ERROR':<10} | {'₦0.00':<6} </pre>\n")
+        
+        message_text = header + table_header + table_divider + "".join(rows)
+        
+        # Build navigation keyboard
+        keyboard = []
+        nav_row = []
+        
+        if page > 1:
+            nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_reply_guys_page_{page-1}"))
+        if page < total_pages:
+            nav_row.append(InlineKeyboardButton("➡️ Next", callback_data=f"admin_reply_guys_page_{page+1}"))
+        
+        if nav_row:
+            keyboard.append(nav_row)
+        
+        # Export option
+        keyboard.append([InlineKeyboardButton("📁 Export to CSV", callback_data="admin_export_reply_guys")])
+        keyboard.append([InlineKeyboardButton("↩️ Back", callback_data="admin_reply_guys_menu")])
+        
+        return message_text, InlineKeyboardMarkup(keyboard)
 
 class AdminExporter:
     """Handles CSV export for admin data."""
