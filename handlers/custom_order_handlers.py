@@ -377,12 +377,19 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         context.user_data["withdrawal_amount_usd"] = qnty_requested
         context.user_data["withdrawal_amount_ngn"] = withdrawal_amount_ngn
+        # Add payment mode support (default to automatic for backwards compatibility)
+        context.user_data["payment_mode"] = context.user_data.get("payment_mode", "automatic")
         context.user_data["awaiting_bank_details"] = True
 
+        # Display payment mode info to user
+        payment_mode_text = ""
+        if context.user_data["payment_mode"] == "manual":
+            payment_mode_text = "\n\n⚠️ *Manual processing mode* - Your request will require admin approval before funds are transferred\\."
+        
         reply_text = (
             f"Please submit your bank details in this format: "
-            f"Account Name, Account Number, Bank Name \(Full Name NOT Abbreviated\)\.\n\n"
-            f"We will process your withdrawal of *₦{int(withdrawal_amount_ngn)}*"
+            f"Account Name, Account Number, Bank Name \\(Full Name NOT Abbreviated\\)\\.\n\n"
+            f"We will process your withdrawal of *₦{int(withdrawal_amount_ngn)}*{payment_mode_text}"
         )
         
         # Define keyboard unconditionally before `InlineKeyboardMarkup` is called
@@ -394,34 +401,18 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(reply_text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
         return
 
-    # --- 9) Bank Details prompt for withdrawal - MODIFIED FOR ADMIN APPROVAL ---
+    # --- 9) Bank Details prompt for withdrawal - UPDATED TO USE NEW WITHDRAWAL SERVICE ---
     if context.user_data.pop("awaiting_bank_details", None):
         logger.info(f"User {user_id} is inputting bank details for withdrawal.")
-        # Access and initialize pending_withdrawals and next_withdrawal_request_id from bot_data
-        if "pending_withdrawals" not in context.bot_data:
-            context.bot_data["pending_withdrawals"] = {}
-        if "next_withdrawal_request_id" not in context.bot_data:
-            context.bot_data["next_withdrawal_request_id"] = 1
-
-        pending_withdrawals = context.bot_data["pending_withdrawals"]
-        next_withdrawal_request_id = context.bot_data["next_withdrawal_request_id"]
-
-
-        # --- 1. Check for existing pending orders ---
-        for req_id, withdrawal_data in pending_withdrawals.items():
-            if withdrawal_data["user_id"] == user_id:
-                await update.message.reply_text(
-                    "⌛ You already have a pending withdrawal request in progress\. "
-                    "\n\nPlease wait for your previous request to be completed or rejected "
-                    "before making a new one\.",
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logger.info(f"User {user_id} tried to create multiple withdrawal requests while one is pending (Request ID: {req_id}).")
-                return # Stop processing if a pending request exists
-
+        
+        # Import new withdrawal service
+        from utils.withdrawal_service import get_withdrawal_service, PaymentMode
+        withdrawal_service = get_withdrawal_service()
+        
         withdrawal_amount_usd = context.user_data.get("withdrawal_amount_usd")
         withdrawal_amount_ngn = context.user_data.get("withdrawal_amount_ngn")
         is_affiliate_withdrawal = context.user_data.get("is_affiliate_withdrawal", False)
+        payment_mode_str = context.user_data.get("payment_mode", "automatic")
         bank_details_raw_input = text # Keep original user input for storage
 
         if withdrawal_amount_ngn is None:
@@ -431,6 +422,23 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.error(f"withdrawal_amount_ngn not found for user {user_id} during bank details submission.")
             return
 
+        # Check for existing pending withdrawals for this user
+        user_withdrawals = withdrawal_service.get_user_withdrawals(user_id, limit=5)
+        pending_withdrawal = None
+        for wd in user_withdrawals:
+            if wd.status.value in ['pending'] or (wd.payment_mode == PaymentMode.MANUAL and wd.admin_approval_state and wd.admin_approval_state.value == 'pending'):
+                pending_withdrawal = wd
+                break
+        
+        if pending_withdrawal:
+            await update.message.reply_text(
+                "⌛ You already have a pending withdrawal request in progress\. "
+                "\n\nPlease wait for your previous request to be completed or rejected "
+                "before making a new one\.",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            logger.info(f"User {user_id} tried to create multiple withdrawal requests while one is pending (Request ID: {pending_withdrawal.id}).")
+            return # Stop processing if a pending request exists
 
         # --- 2. Check user's current balance ---
         user_current_balance_ngn = get_total_amount(user_id) # Call your balance function
@@ -444,13 +452,13 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             logger.warning(f"User {user_id} attempted withdrawal (₦{withdrawal_amount_ngn}) with insufficient balance (₦{user_current_balance_ngn}).")
-            # Optionally, clear related user_data if you want them to restart the withdrawal process
+            # Clear related user_data
             context.user_data.pop("withdrawal_amount_usd", None)
             context.user_data.pop("withdrawal_amount_ngn", None)
             context.user_data.pop("is_affiliate_withdrawal", None)
+            context.user_data.pop("payment_mode", None)
             return
 
-            
         # Validate bank details format
         cleaned_parts = [
             part.strip()
@@ -471,48 +479,91 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return
 
-        escaped_bank_details_for_display = escape_md(bank_details_raw_input)
+        # Convert payment mode string to enum
+        try:
+            payment_mode = PaymentMode(payment_mode_str)
+        except ValueError:
+            payment_mode = PaymentMode.AUTOMATIC  # Default fallback
+        
+        # Create withdrawal using new service
+        try:
+            withdrawal = withdrawal_service.create_withdrawal(
+                user_id=user_id,
+                amount_usd=withdrawal_amount_usd,
+                amount_ngn=withdrawal_amount_ngn,
+                account_name=account_name,
+                account_number=account_number,
+                bank_name=bank_name,
+                bank_details_raw=bank_details_raw_input,
+                is_affiliate_withdrawal=is_affiliate_withdrawal,
+                payment_mode=payment_mode
+            )
+            
+            logger.info(f"Withdrawal {withdrawal.id} created for user {user_id} in {payment_mode.value} mode")
+            
+            # Handle automatic vs manual processing
+            if payment_mode == PaymentMode.AUTOMATIC:
+                # Process automatically with Flutterwave
+                success = withdrawal_service.process_automatic_withdrawal(withdrawal)
+                
+                if success:
+                    await update.message.reply_text(
+                        f"✅ *Withdrawal Processed Successfully\\!*\n\n"
+                        f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
+                        f"Your balance has been updated and the transfer has been initiated\\.",
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
+                else:
+                    await update.message.reply_text(
+                        "❌ *Withdrawal Processing Failed*\n\n"
+                        "There was an issue processing your withdrawal\\. "
+                        "Please contact support if this continues\\.",
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
+            
+            else:  # Manual processing
+                # Notify admin for manual approval
+                escaped_bank_details_for_display = escape_md(bank_details_raw_input)
+                
+                admin_approval_message = (
+                    f"🔔 *NEW MANUAL WITHDRAWAL REQUEST\\!* 🔔\n\n"
+                    f"User: [{escape_md(user_first_name)}](tg://user?id={user_id})"
+                    f"{f' \\(@{escape_md(user_username)}\\)' if user_username else ''}\n"
+                    f"Withdrawal Type: {escape_md('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
+                    f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
+                    f"Bank Details:\n`{escaped_bank_details_for_display}`\n\n"
+                    f"Request ID: `{withdrawal.id}`\n\n"
+                    f"⚠️ *Manual processing* \\- Balance will be deducted only upon approval\\."
+                )
 
-        request_id = next_withdrawal_request_id
-        pending_withdrawals[request_id] = {
-            "user_id": user_id,
-            "user_first_name": user_first_name,
-            "user_username": user_username,
-            "withdrawal_amount_usd": withdrawal_amount_usd,
-            "withdrawal_amount_ngn": withdrawal_amount_ngn,
-            "bank_details": bank_details_raw_input, # Store raw input
-            "account_name": account_name,
-            "account_number": account_number,
-            "bank_name": bank_name,
-            "is_affiliate_withdrawal": is_affiliate_withdrawal,
-            "timestamp": update.message.date.isoformat(),
-            "user_message_id": update.message.message_id
-        }
-        context.bot_data["next_withdrawal_request_id"] += 1
+                # Use new admin approval buttons
+                approval_keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✅ Approve", callback_data=f"admin_approve_withdrawal_{withdrawal.id}")],
+                    [InlineKeyboardButton("❌ Reject", callback_data=f"admin_reject_withdrawal_{withdrawal.id}")]
+                ])
 
-        admin_approval_message = (
-            f"🔔 *NEW WITHDRAWAL REQUEST AWAITING APPROVAL\!* 🔔\n\n"
-            f"User: [{escape_md(user_first_name)}](tg://user?id={user_id})"
-            f"{f' \\(@{escape_md(user_username)}\\)' if user_username else ''}\n"
-            f"Withdrawal Type: {escape_md('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
-            f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
-            f"Bank Details:\n`{escaped_bank_details_for_display}`\n\n"
-            f"Request ID: `{request_id}`\n\n"
-            f"Click 'Approve' to initiate the Flutterwave transfer"
-        )
+                await notify_admin(user_id, admin_approval_message, reply_markup=approval_keyboard)
 
-        approval_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Approve Withdrawal", callback_data=f"approve_withdrawal_{request_id}")],
-            [InlineKeyboardButton("❌ Reject Withdrawal", callback_data=f"reject_withdrawal_{request_id}")]
-        ])
-
-        await notify_admin(user_id, admin_approval_message, reply_markup=approval_keyboard) # Using notify_admin with keyboard
-
-        await update.message.reply_text(
-            f"✅ Your withdrawal request for *₦{int(withdrawal_amount_ngn)}* has been submitted "
-            "and is awaiting admin approval\. We will notify you once it's processed\."
-            , parse_mode=ParseMode.MARKDOWN_V2
-        )
+                await update.message.reply_text(
+                    f"✅ Your manual withdrawal request for *₦{int(withdrawal_amount_ngn)}* has been submitted "
+                    "and is awaiting admin approval\. We will notify you once it's processed\."
+                    , parse_mode=ParseMode.MARKDOWN_V2
+                )
+            
+            # Clear user data
+            context.user_data.pop("withdrawal_amount_usd", None)
+            context.user_data.pop("withdrawal_amount_ngn", None)
+            context.user_data.pop("is_affiliate_withdrawal", None)
+            context.user_data.pop("payment_mode", None)
+            
+        except Exception as e:
+            logger.error(f"Failed to create withdrawal for user {user_id}: {str(e)}")
+            await update.message.reply_text(
+                "❌ *System Error*\n\n"
+                "Failed to create withdrawal request\\. Please try again or contact support\\.",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            return
 
         keyboard = [
             [InlineKeyboardButton("Back to Panel", callback_data="reply_guys_panel")]

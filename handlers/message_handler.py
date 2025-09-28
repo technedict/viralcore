@@ -6,6 +6,12 @@ from handlers.custom_order_handlers import custom_order_handler
 async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     flags = context.user_data
 
+    # Check for service ID input first
+    if flags.get("awaiting_service_id_input"):
+        from handlers.admin_service_handlers import handle_service_id_input
+        await handle_service_id_input(update, context)
+        return
+
     # Check for admin-related flags first
     if any([
         flags.get("awaiting_broadcast"),

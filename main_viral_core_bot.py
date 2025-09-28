@@ -99,11 +99,65 @@ def main():
         tg_account_selection_handler,
         pattern=r"^select_tg_"
     ))
+    
+    # NEW: Withdrawal management handlers
+    from handlers.admin_withdrawal_handlers import (
+        admin_pending_withdrawals_handler,
+        admin_approve_withdrawal_handler,
+        admin_reject_withdrawal_handler,
+        admin_withdrawal_stats_handler
+    )
+    app.add_handler(CallbackQueryHandler(
+        admin_pending_withdrawals_handler,
+        pattern=r"^admin_withdrawals_pending$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_approve_withdrawal_handler,
+        pattern=r"^admin_approve_withdrawal_\d+$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_reject_withdrawal_handler,
+        pattern=r"^admin_reject_withdrawal_\d+$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_withdrawal_stats_handler,
+        pattern=r"^admin_withdrawals_stats$"
+    ))
+    
+    # NEW: Service management handlers
+    from handlers.admin_service_handlers import (
+        admin_services_current_handler,
+        admin_services_edit_handler,
+        admin_edit_specific_service_handler,
+        admin_confirm_service_update_handler,
+        admin_services_audit_handler
+    )
+    app.add_handler(CallbackQueryHandler(
+        admin_services_current_handler,
+        pattern=r"^admin_services_current$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_services_edit_handler,
+        pattern=r"^admin_services_edit$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_edit_specific_service_handler,
+        pattern=r"^admin_edit_service_[^_]+_.+$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_confirm_service_update_handler,
+        pattern=r"^admin_confirm_service_update$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_services_audit_handler,
+        pattern=r"^admin_services_audit$"
+    ))
+    
     app.add_handler(CallbackQueryHandler(
         admin_panel_handler,
         pattern=r"^admin_"
     ))
-    # NEW: Specific handler for withdrawal approvals/rejections
+    # Existing withdrawal approval handler (keep for backwards compatibility)
     app.add_handler(CallbackQueryHandler(
         handle_withdrawal_approval,
         pattern=r"^(approve_withdrawal_|reject_withdrawal_)\d+$"
@@ -114,7 +168,7 @@ def main():
     ))
     app.add_handler(CallbackQueryHandler(
         menu_handler,
-        # Updated pattern: Matches anything that is NOT 'admin_', 'approve_withdrawal_', or 'reject_withdrawal_'
+        # Updated pattern: Matches anything that is NOT handled above
         pattern=r"^(?!admin_|approve_withdrawal_|reject_withdrawal_|approve_replies_order_|reject_replies_order_).*"
     ))
 

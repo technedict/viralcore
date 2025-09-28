@@ -54,6 +54,191 @@ def apply_job_queue_migration():
         print(f"❌ Failed to apply job queue migration: {e}")
         return False
 
+def apply_withdrawals_migration():
+    """Apply withdrawals table migration with payment modes and admin approval."""
+    print("Applying withdrawals migration...")
+    
+    try:
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            
+            # Create withdrawals table with new payment mode features
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    amount_usd REAL NOT NULL,
+                    amount_ngn REAL NOT NULL,
+                    payment_mode TEXT NOT NULL DEFAULT 'automatic',
+                    admin_approval_state TEXT DEFAULT NULL,
+                    admin_id INTEGER DEFAULT NULL,
+                    account_name TEXT NOT NULL,
+                    account_number TEXT NOT NULL,
+                    bank_name TEXT NOT NULL,
+                    bank_details_raw TEXT NOT NULL,
+                    is_affiliate_withdrawal INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    approved_at TEXT DEFAULT NULL,
+                    processed_at TEXT DEFAULT NULL,
+                    failure_reason TEXT DEFAULT NULL,
+                    flutterwave_reference TEXT DEFAULT NULL,
+                    flutterwave_trace_id TEXT DEFAULT NULL,
+                    operation_id TEXT DEFAULT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    FOREIGN KEY (admin_id) REFERENCES users (id),
+                    CHECK (payment_mode IN ('automatic', 'manual')),
+                    CHECK (admin_approval_state IS NULL OR admin_approval_state IN ('pending', 'approved', 'rejected')),
+                    CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'rejected'))
+                );
+            ''')
+            
+            # Create indexes for performance
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawals_payment_mode ON withdrawals(payment_mode)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawals_admin_approval_state ON withdrawals(admin_approval_state)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawals_created_at ON withdrawals(created_at)')
+            
+            # Create withdrawal audit log table
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawal_audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    withdrawal_id INTEGER NOT NULL,
+                    admin_id INTEGER DEFAULT NULL,
+                    action TEXT NOT NULL,
+                    old_status TEXT DEFAULT NULL,
+                    new_status TEXT DEFAULT NULL,
+                    old_approval_state TEXT DEFAULT NULL,
+                    new_approval_state TEXT DEFAULT NULL,
+                    reason TEXT DEFAULT NULL,
+                    metadata TEXT DEFAULT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (withdrawal_id) REFERENCES withdrawals (id),
+                    FOREIGN KEY (admin_id) REFERENCES users (id)
+                );
+            ''')
+            
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawal_audit_withdrawal_id ON withdrawal_audit_log(withdrawal_id)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawal_audit_created_at ON withdrawal_audit_log(created_at)')
+            
+            conn.commit()
+            
+        print("✅ Withdrawals table and audit log created")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to apply withdrawals migration: {e}")
+        return False
+
+def apply_boosting_service_providers_migration():
+    """Apply boosting service providers mapping migration."""
+    print("Applying boosting service providers migration...")
+    
+    try:
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            
+            # Create boosting services table
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS boosting_services (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    service_type TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    CHECK (service_type IN ('likes', 'views', 'comments')),
+                    CHECK (is_active IN (0, 1))
+                );
+            ''')
+            
+            # Create boosting service providers mapping table
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS boosting_service_providers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    service_id INTEGER NOT NULL,
+                    provider_name TEXT NOT NULL,
+                    provider_service_id INTEGER NOT NULL,
+                    created_by INTEGER DEFAULT NULL,
+                    updated_by INTEGER DEFAULT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (service_id) REFERENCES boosting_services (id),
+                    FOREIGN KEY (created_by) REFERENCES users (id),
+                    FOREIGN KEY (updated_by) REFERENCES users (id),
+                    UNIQUE(service_id, provider_name)
+                );
+            ''')
+            
+            # Create audit log for service provider changes
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS boosting_service_audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    service_provider_id INTEGER NOT NULL,
+                    admin_id INTEGER DEFAULT NULL,
+                    action TEXT NOT NULL,
+                    old_provider_service_id INTEGER DEFAULT NULL,
+                    new_provider_service_id INTEGER DEFAULT NULL,
+                    reason TEXT DEFAULT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (service_provider_id) REFERENCES boosting_service_providers (id),
+                    FOREIGN KEY (admin_id) REFERENCES users (id)
+                );
+            ''')
+            
+            # Create indexes
+            c.execute('CREATE INDEX IF NOT EXISTS idx_boosting_services_active ON boosting_services(is_active)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_boosting_service_providers_service_id ON boosting_service_providers(service_id)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_boosting_service_providers_provider ON boosting_service_providers(provider_name)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_boosting_service_audit_service_provider ON boosting_service_audit_log(service_provider_id)')
+            
+            # Seed initial data from current provider configuration
+            c.execute('SELECT COUNT(*) FROM boosting_services')
+            if c.fetchone()[0] == 0:
+                # Insert default services
+                c.execute('''
+                    INSERT INTO boosting_services (name, service_type, is_active) 
+                    VALUES 
+                    ('Default Likes Service', 'likes', 1),
+                    ('Default Views Service', 'views', 1)
+                ''')
+                
+                # Get the inserted service IDs
+                c.execute('SELECT id FROM boosting_services WHERE service_type = ?', ('likes',))
+                likes_service_id = c.fetchone()[0]
+                
+                c.execute('SELECT id FROM boosting_services WHERE service_type = ?', ('views',))
+                views_service_id = c.fetchone()[0]
+                
+                # Insert current provider mappings from boost_provider_utils.py
+                providers = [
+                    ('smmflare', 8646, 8381),  # like_service_id, view_service_id
+                    ('plugsmms', 11023, 7750),
+                    ('smmstone', 6662, 5480)
+                ]
+                
+                for provider_name, like_id, view_id in providers:
+                    c.execute('''
+                        INSERT INTO boosting_service_providers 
+                        (service_id, provider_name, provider_service_id, created_at, updated_at)
+                        VALUES (?, ?, ?, datetime('now'), datetime('now'))
+                    ''', (likes_service_id, provider_name, like_id))
+                    
+                    c.execute('''
+                        INSERT INTO boosting_service_providers 
+                        (service_id, provider_name, provider_service_id, created_at, updated_at)
+                        VALUES (?, ?, ?, datetime('now'), datetime('now'))
+                    ''', (views_service_id, provider_name, view_id))
+            
+            conn.commit()
+            
+        print("✅ Boosting service providers tables created and seeded")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to apply boosting service providers migration: {e}")
+        return False
+
 def check_migration_status():
     """Check which migrations have been applied."""
     print("Checking migration status...")
@@ -73,22 +258,34 @@ def check_migration_status():
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='job_queue'")
         job_queue_exists = c.fetchone() is not None
         
+        # Check for withdrawals table
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='withdrawals'")
+        withdrawals_exists = c.fetchone() is not None
+        
+        # Check for boosting service providers table
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boosting_service_providers'")
+        boosting_providers_exists = c.fetchone() is not None
+        
         # Check for users table columns
         c.execute("PRAGMA table_info(users)")
         user_columns = [col[1] for col in c.fetchall()]
         has_affiliate_balance = 'affiliate_balance' in user_columns
         
         print("\nMigration Status:")
-        print(f"  Balance Operations Ledger: {'✅ Applied' if balance_ops_exists else '❌ Not Applied'}")
-        print(f"  Reply Balance Tracking:    {'✅ Applied' if reply_balance_exists else '❌ Not Applied'}")
-        print(f"  Job Queue System:          {'✅ Applied' if job_queue_exists else '❌ Not Applied'}")
-        print(f"  User Affiliate Balance:    {'✅ Applied' if has_affiliate_balance else '❌ Not Applied'}")
+        print(f"  Balance Operations Ledger:     {'✅ Applied' if balance_ops_exists else '❌ Not Applied'}")
+        print(f"  Reply Balance Tracking:        {'✅ Applied' if reply_balance_exists else '❌ Not Applied'}")
+        print(f"  Job Queue System:              {'✅ Applied' if job_queue_exists else '❌ Not Applied'}")
+        print(f"  User Affiliate Balance:        {'✅ Applied' if has_affiliate_balance else '❌ Not Applied'}")
+        print(f"  Withdrawals System:            {'✅ Applied' if withdrawals_exists else '❌ Not Applied'}")
+        print(f"  Boosting Service Providers:    {'✅ Applied' if boosting_providers_exists else '❌ Not Applied'}")
         
         return {
             'balance_operations': balance_ops_exists,
             'reply_balance': reply_balance_exists,
             'job_queue': job_queue_exists,
-            'affiliate_balance': has_affiliate_balance
+            'affiliate_balance': has_affiliate_balance,
+            'withdrawals': withdrawals_exists,
+            'boosting_providers': boosting_providers_exists
         }
 
 def apply_all_migrations():
@@ -113,6 +310,18 @@ def apply_all_migrations():
     
     # Apply job queue migration
     if apply_job_queue_migration():
+        migrations_applied += 1
+    else:
+        migrations_failed += 1
+    
+    # Apply withdrawals migration
+    if apply_withdrawals_migration():
+        migrations_applied += 1
+    else:
+        migrations_failed += 1
+    
+    # Apply boosting service providers migration
+    if apply_boosting_service_providers_migration():
         migrations_applied += 1
     else:
         migrations_failed += 1
@@ -189,6 +398,10 @@ def main():
         pending_migrations.append('Reply Balance Tracking')
     if not status['job_queue']:
         pending_migrations.append('Job Queue System')
+    if not status['withdrawals']:
+        pending_migrations.append('Withdrawals System')
+    if not status['boosting_providers']:
+        pending_migrations.append('Boosting Service Providers')
     
     if pending_migrations:
         print(f"\nPending migrations: {', '.join(pending_migrations)}")
