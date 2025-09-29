@@ -16,7 +16,7 @@ from utils.config import APIConfig # Import APIConfig to access ADMIN_IDS
 from utils.payment_utils import initiate_flutterwave_transfer, get_usd_to_ngn_rate
 from utils.notification import notify_admin # NEW: Import the admin notification utility
 from handlers.menu_handlers import _process_quantity_and_set_next_step, menu_handler # NEW: Import helper and menu_handler
-from ViralMonitor.utils.db import remove_amount, get_total_amount
+from viralmonitor.utils.db import remove_amount, get_total_amount
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,12 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
       - Entering post-payment details (X poll, direct add, slow push)
       - Entering withdrawal details
     """
+    raw_flags = getattr(context, "user_data", None)
+    flags = raw_flags or {}
+    if raw_flags is None:
+        # Lightweight debug note; avoids crashing the handler path. Replace with central logger if available.
+        # We intentionally do not import project-wide logging here to prevent circular imports.
+        print("[custom_order_handler] context.user_data was None; using empty dict fallback")
     text = update.message.text.strip()
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id

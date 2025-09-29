@@ -105,7 +105,7 @@ class TestWithdrawalCore:
                     )
                 ''')
                 
-                # Create reply_balances table for ViralMonitor integration
+                # Create reply_balances table for viralmonitor integration
                 c.execute('''
                     CREATE TABLE IF NOT EXISTS reply_balances (
                         user_id INTEGER PRIMARY KEY,

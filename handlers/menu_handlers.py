@@ -28,13 +28,6 @@ from utils.db_utils import (
     format_detailed_balances_message, # Added for withdrawal handler
     get_affiliate_balance # Added for withdrawal handler
 )
-from ViralMonitor.utils.db import (
-    get_total_amount,
-    get_total_posts,
-    get_user_daily_posts,
-    add_post,
-    remove_amount # Added for withdrawal handler
-)
 from utils.menu_utils import (
     get_main_menu_text,
     main_menu_keyboard,
@@ -45,6 +38,20 @@ from utils.admin_db_utils import is_admin as is_user_admin
 from utils.messaging import escape_markdown_v2 # Added for withdrawal handler (escape_markdown_v2 renamed to escape_m
 from handlers.payment_handler import PaymentHandler
 from utils.payment_utils import initiate_flutterwave_transfer # Added for withdrawal handler
+import sys, os
+
+current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+from viralmonitor.utils.db import (
+    get_total_amount,
+    get_total_posts,
+    get_user_daily_posts,
+    add_post,
+    remove_amount # Added for withdrawal handler
+)
 
 # Access the global dictionary from custom_order_handlers.py (Assuming it's defined there)
 # IMPORTANT: This assumes 'pending_withdrawals' is a global dict in custom_order_handlers.

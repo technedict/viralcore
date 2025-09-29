@@ -23,8 +23,8 @@ from utils.boost_utils import get_boost_service_balance
 from utils.db_utils import get_user_metrics, get_user
 from utils.config import APIConfig
 from utils.boost_provider_utils import ProviderConfig
-# Assuming these are available and correctly imported from ViralMonitor
-from ViralMonitor.utils.db import get_all_reply_guys_ids, get_total_amount, get_username_by_userid
+# Assuming these are available and correctly imported from viralmonitor
+from viralmonitor.utils.db import get_all_reply_guys_ids, get_total_amount, get_username_by_userid
 
 
 logger = logging.getLogger(__name__)

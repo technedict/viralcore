@@ -16,7 +16,7 @@ from typing import List, Dict, Any, Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.db_utils import get_connection, DB_FILE, get_affiliate_balance
-from ViralMonitor.utils.db import get_total_amount, init_reply_balance_db
+from viralmonitor.utils.db import get_total_amount, init_reply_balance_db
 from utils.balance_operations import init_operations_ledger
 
 def get_all_users_with_balances() -> List[Dict[str, Any]]:

@@ -212,7 +212,7 @@ class AdminPaginator:
         rows = []
         for user_id in page_reply_guys:
             try:
-                from ViralMonitor.utils.db import get_total_amount, get_username_by_userid
+                from viralmonitor.utils.db import get_total_amount, get_username_by_userid
                 amount = get_total_amount(user_id)
                 username = get_username_by_userid(user_id)
                 username_display = (username.title()[:9] + '…') if username and len(username) > 9 else (username.title() if username else "N/A")

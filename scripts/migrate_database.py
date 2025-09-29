@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.db_utils import get_connection, DB_FILE
 from utils.balance_operations import init_operations_ledger
-from ViralMonitor.utils.db import init_reply_balance_db
+from viralmonitor.utils.db import init_reply_balance_db
 
 def apply_balance_operations_migration():
     """Apply balance operations ledger migration."""

@@ -8,7 +8,7 @@ import logging
 from typing import Optional, Literal
 from datetime import datetime
 from utils.db_utils import get_connection, DB_FILE
-from ViralMonitor.utils.db import get_total_amount, remove_amount
+from viralmonitor.utils.db import get_total_amount, remove_amount
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ def atomic_balance_update(
                 
             elif balance_type == "reply":
                 # For reply balance, get current balance safely
-                from ViralMonitor.utils.db import get_total_amount
+                from viralmonitor.utils.db import get_total_amount
                 current_balance = get_total_amount(user_id)
                 
                 if amount < 0 and abs(amount) > current_balance:

@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from utils.db_utils import init_main_db, create_user, get_affiliate_balance
-from ViralMonitor.utils.db import init_reply_balance_db, get_total_amount
+from viralmonitor.utils.db import init_reply_balance_db, get_total_amount
 from utils.balance_operations import (
     init_operations_ledger, 
     atomic_balance_update,

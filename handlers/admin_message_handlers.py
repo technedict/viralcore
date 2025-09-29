@@ -4,7 +4,7 @@
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes
-from ViralMonitor.utils.db import add_post
+from viralmonitor.utils.db import add_post
 from utils.admin_db_utils import (
     add_payment,
     add_posts,
