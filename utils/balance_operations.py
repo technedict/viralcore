@@ -3,11 +3,17 @@
 # Atomic balance operations with idempotency support
 
 import sqlite3
-import uuid
+import uuid, os, sys
 import logging
 from typing import Optional, Literal
 from datetime import datetime
 from utils.db_utils import get_connection, DB_FILE
+
+current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 from viralmonitor.utils.db import get_total_amount, remove_amount
 
 logger = logging.getLogger(__name__)

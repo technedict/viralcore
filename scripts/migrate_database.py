@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.db_utils import get_connection, DB_FILE
 from utils.balance_operations import init_operations_ledger
-from viralmonitor.utils.db import init_reply_balance_db
+from viralmonitor.utils.db import __init_vm_db__
 
 def apply_balance_operations_migration():
     """Apply balance operations ledger migration."""
@@ -34,7 +34,7 @@ def apply_reply_balance_migration():
     print("Applying reply balance migration...")
     
     try:
-        init_reply_balance_db()
+        __init_vm_db__()
         print("✅ Reply balance table created/updated")
         return True
     except Exception as e:
