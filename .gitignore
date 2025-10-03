@@ -40,6 +40,10 @@ ENV/
 *.sqlite3.backup_*
 *.db
 
+# Database directory (exclude backups)
+db/*.db
+db/backups/
+
 # Log files
 *.log
 *.log.*
