@@ -1,6 +1,4 @@
-Add a shell script to migrate and start the python file
-all db should be in one folder named: db
+Automatic withdrawal is still being sent to the api before admin approval
+Also manual withdrawal deduction still isnt working (Database error in atomic_balance_update: database is locked)
+
 convert affiliate to naira
-withrawal should also require admin approval before going through the api
-if withrawal api fail the err should be sent to the admins
-also manual withdrawal deduction isnt working

@@ -136,6 +136,8 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
     
     # Get all pending withdrawals
     pending_withdrawals = get_withdrawal_service().get_pending_withdrawals()
+
+    pendin_text = f"✅ *No Pending Withdrawals*\n\n All withdrawal requests have been processed\\.",
     
     if not pending_withdrawals:
         keyboard = [
@@ -144,8 +146,7 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         msg = await query.message.reply_text(
-            "✅ *No Pending Withdrawals*\n\n"
-            "All withdrawal requests have been processed\\.",
+            pending_withdrawals,
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
@@ -235,7 +236,7 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
         return
     
     if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
-        msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\).", parse_mode=ParseMode.MARKDOWN_V2)
+        msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\)\\.", parse_mode=ParseMode.MARKDOWN_V2)
         return
     
     # Approve the withdrawal using unified method based on current mode  
