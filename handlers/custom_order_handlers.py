@@ -15,6 +15,7 @@ from utils.messaging import escape_markdown_v2
 from utils.config import APIConfig # Import APIConfig to access ADMIN_IDS
 from utils.payment_utils import initiate_flutterwave_transfer, get_usd_to_ngn_rate
 from utils.notification import notify_admin # NEW: Import the admin notification utility
+from utils.withdrawal_settings import get_withdrawal_mode # NEW: Import the withdrawal mode getter
 from handlers.menu_handlers import _process_quantity_and_set_next_step, menu_handler # NEW: Import helper and menu_handler
 from viralmonitor.utils.db import remove_amount, get_total_amount
 
@@ -28,12 +29,14 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
       - Entering post-payment details (X poll, direct add, slow push)
       - Entering withdrawal details
     """
-    raw_flags = getattr(context, "user_data", None)
-    flags = raw_flags or {}
-    if raw_flags is None:
-        # Lightweight debug note; avoids crashing the handler path. Replace with central logger if available.
-        # We intentionally do not import project-wide logging here to prevent circular imports.
-        print("[custom_order_handler] context.user_data was None; using empty dict fallback")
+    raw_flags_context = getattr(context, "user_data", None)
+    raw_flags_update = getattr(update, "message", None)
+    if raw_flags_context is None:
+        logger.error("custom_order_handler called but context.user_data is None")
+        return
+    elif raw_flags_update is None or update.message.text is None:
+        logger.error("custom_order_handler called but update.message or update.message.text is None")
+        return
     text = update.message.text.strip()
     chat_type = update.effective_chat.type
     user_id = update.effective_user.id
@@ -419,7 +422,7 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         withdrawal_amount_usd = context.user_data.get("withdrawal_amount_usd")
         withdrawal_amount_ngn = context.user_data.get("withdrawal_amount_ngn")
         is_affiliate_withdrawal = context.user_data.get("is_affiliate_withdrawal", False)
-        payment_mode_str = context.user_data.get("payment_mode", "automatic")
+        payment_mode_enum = get_withdrawal_mode()
         bank_details_raw_input = text # Keep original user input for storage
 
         if withdrawal_amount_ngn is None:
@@ -488,7 +491,8 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         # Convert payment mode string to enum
         try:
-            payment_mode = PaymentMode(payment_mode_str)
+            payment_mode = PaymentMode.from_withdrawal(payment_mode_enum)
+            print(payment_mode)
         except ValueError:
             payment_mode = PaymentMode.AUTOMATIC  # Default fallback
         

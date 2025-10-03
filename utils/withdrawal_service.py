@@ -20,6 +20,11 @@ class PaymentMode(Enum):
     AUTOMATIC = "automatic"
     MANUAL = "manual"
 
+    @classmethod
+    def from_withdrawal(cls, wm: "WithdrawalMode") -> "PaymentMode":
+        return cls(wm.value)
+
+
 class AdminApprovalState(Enum):
     PENDING = "pending"
     APPROVED = "approved"

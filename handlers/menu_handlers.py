@@ -228,7 +228,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Central callback_query handler for all menu options.
     """
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception as e:
+        logger.error("Failed to answer callback query: %s", e)
     data = query.data
     user_id = query.from_user.id
     username = query.from_user.username or ""
@@ -975,7 +978,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.MARKDOWN_V2
             )
     except BadRequest as e:
-        logger.warning("menu_handler edit failed (%s) for user %s. Resending message.", e, user_id)
+        logger.warning("menu_handler edit failed (%s) for user %s. Resending message.", e, query.from_user.id)
         if img_path and os.path.isfile(img_path):
             msg = await query.message.reply_photo(
                 photo=img_path,
@@ -991,7 +994,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
     finally:
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.error("Failed to answer callback query: %s", e)
 
 # ##### MODIFICATION: Start of handle_withdrawal_approval function
 import re # Make sure re is imported at the top of the file

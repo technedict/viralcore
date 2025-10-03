@@ -258,7 +258,7 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
             f"✅ *Withdrawal Approved Successfully\\!*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
-            f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
+            f"• User:  [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
             f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
             f"• Balance deducted successfully\n"
             f"• User will be notified"
@@ -322,7 +322,7 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
         return
     
     if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
-        msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\).", parse_mode=ParseMode.MARKDOWN_V2)
+        msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\)\\.", parse_mode=ParseMode.MARKDOWN_V2)
         return
     
     # Reject the withdrawal
@@ -345,8 +345,8 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
             f"❌ *Withdrawal Rejected*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
-            f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
-            f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
+            f"• User: [{escape_markdown_v2(username)}], {withdrawal.user_id}\n"
+            f"• Amount: *₦{int(withdrawal.amount_ngn)}*\n"
             f"• Status: Rejected\n"
             f"• User will be notified"
         )

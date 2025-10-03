@@ -1,1 +1,6 @@
-add conn to init vm db
+Add a shell script to migrate and start the python file
+all db should be in one folder named: db
+convert affiliate to naira
+withrawal should also require admin approval before going through the api
+if withrawal api fail the err should be sent to the admins
+also manual withdrawal deduction isnt working
