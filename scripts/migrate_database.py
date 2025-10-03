@@ -238,6 +238,60 @@ def apply_boosting_service_providers_migration():
         print(f"❌ Failed to apply boosting service providers migration: {e}")
         return False
 
+def apply_withdrawal_errors_migration():
+    """Apply withdrawal errors tracking migration."""
+    print("Applying withdrawal errors migration...")
+    
+    try:
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            
+            # Create withdrawal_errors table
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawal_errors (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    withdrawal_id INTEGER NOT NULL,
+                    error_code TEXT,
+                    error_message TEXT NOT NULL,
+                    error_payload TEXT,
+                    request_id TEXT,
+                    correlation_id TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (withdrawal_id) REFERENCES withdrawals (id)
+                )
+            ''')
+            
+            # Create indexes for performance
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawal_errors_withdrawal_id ON withdrawal_errors(withdrawal_id)')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_withdrawal_errors_created_at ON withdrawal_errors(created_at)')
+            
+            conn.commit()
+            
+        print("✅ Withdrawal errors table created")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to apply withdrawal errors migration: {e}")
+        return False
+
+def apply_db_directory_migration():
+    """Apply database directory centralization migration."""
+    print("Applying database directory migration...")
+    
+    try:
+        from utils.db_utils import migrate_db_files_to_directory
+        
+        if migrate_db_files_to_directory():
+            print("✅ Database files migrated to centralized directory")
+            return True
+        else:
+            print("❌ Database directory migration failed")
+            return False
+    except Exception as e:
+        print(f"❌ Failed to apply DB directory migration: {e}")
+        return False
+
+
 def check_migration_status():
     """Check which migrations have been applied."""
     print("Checking migration status...")
@@ -265,25 +319,38 @@ def check_migration_status():
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='boosting_service_providers'")
         boosting_providers_exists = c.fetchone() is not None
         
+        # Check for withdrawal errors table
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='withdrawal_errors'")
+        withdrawal_errors_exists = c.fetchone() is not None
+        
         # Check for users table columns
         c.execute("PRAGMA table_info(users)")
         user_columns = [col[1] for col in c.fetchall()]
         has_affiliate_balance = 'affiliate_balance' in user_columns
         
+        # Check if DB files are in centralized directory
+        from pathlib import Path
+        from utils.db_utils import DB_DIR
+        db_centralized = Path(DB_DIR).exists() and (Path(DB_DIR) / "viralcore.db").exists()
+        
         print("\nMigration Status:")
+        print(f"  DB Directory Centralization:   {'✅ Applied' if db_centralized else '❌ Not Applied'}")
         print(f"  Balance Operations Ledger:     {'✅ Applied' if balance_ops_exists else '❌ Not Applied'}")
         print(f"  Reply Balance Tracking:        {'✅ Applied' if reply_balance_exists else '❌ Not Applied'}")
         print(f"  Job Queue System:              {'✅ Applied' if job_queue_exists else '❌ Not Applied'}")
         print(f"  User Affiliate Balance:        {'✅ Applied' if has_affiliate_balance else '❌ Not Applied'}")
         print(f"  Withdrawals System:            {'✅ Applied' if withdrawals_exists else '❌ Not Applied'}")
+        print(f"  Withdrawal Errors Tracking:    {'✅ Applied' if withdrawal_errors_exists else '❌ Not Applied'}")
         print(f"  Boosting Service Providers:    {'✅ Applied' if boosting_providers_exists else '❌ Not Applied'}")
         
         return {
+            'db_centralized': db_centralized,
             'balance_operations': balance_ops_exists,
             'reply_balance': reply_balance_exists,
             'job_queue': job_queue_exists,
             'affiliate_balance': has_affiliate_balance,
             'withdrawals': withdrawals_exists,
+            'withdrawal_errors': withdrawal_errors_exists,
             'boosting_providers': boosting_providers_exists
         }
 
@@ -294,6 +361,12 @@ def apply_all_migrations():
     
     migrations_applied = 0
     migrations_failed = 0
+    
+    # Apply DB directory migration first (before other migrations)
+    if apply_db_directory_migration():
+        migrations_applied += 1
+    else:
+        migrations_failed += 1
     
     # Apply balance operations migration
     if apply_balance_operations_migration():
@@ -315,6 +388,12 @@ def apply_all_migrations():
     
     # Apply withdrawals migration
     if apply_withdrawals_migration():
+        migrations_applied += 1
+    else:
+        migrations_failed += 1
+    
+    # Apply withdrawal errors migration
+    if apply_withdrawal_errors_migration():
         migrations_applied += 1
     else:
         migrations_failed += 1
