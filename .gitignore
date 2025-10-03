@@ -37,6 +37,7 @@ ENV/
 # Database backups
 *.db.backup_*
 *.sqlite3.backup_*
+*.db
 
 # Log files (keep main logs but exclude temporary ones)
 *.log.*
