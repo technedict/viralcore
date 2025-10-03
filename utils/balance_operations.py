@@ -14,7 +14,16 @@ root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-from viralmonitor.utils.db import get_total_amount, remove_amount
+# Try to import viralmonitor if available (optional dependency)
+try:
+    from viralmonitor.utils.db import get_total_amount, remove_amount
+    VIRALMONITOR_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    logger = logging.getLogger(__name__)
+    logger.warning("viralmonitor module not available, using fallback for reply balance operations")
+    VIRALMONITOR_AVAILABLE = False
+    get_total_amount = None
+    remove_amount = None
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +139,16 @@ def atomic_balance_update(
                 )
                 
             elif balance_type == "reply":
-                # For reply balance, get current balance safely
-                from viralmonitor.utils.db import get_total_amount
-                current_balance = get_total_amount(user_id)
+                # For reply balance, use local implementation
+                # Try to import viralmonitor if available, otherwise use fallback
+                try:
+                    from viralmonitor.utils.db import get_total_amount
+                    current_balance = get_total_amount(user_id)
+                except (ImportError, ModuleNotFoundError):
+                    # Fallback: use reply_balances table directly
+                    c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (user_id,))
+                    row = c.fetchone()
+                    current_balance = row['balance'] if row else 0.0
                 
                 if amount < 0 and abs(amount) > current_balance:
                     logger.warning(f"Insufficient reply balance for user {user_id}: requested {abs(amount)}, available {current_balance}")
@@ -273,15 +289,27 @@ def get_balance_safely(user_id: int, balance_type: BalanceType) -> float:
     """
     try:
         if balance_type == "affiliate":
-            from utils.db_utils import get_affiliate_balance
-            return get_affiliate_balance(user_id)
+            with get_connection(DB_FILE) as conn:
+                c = conn.cursor()
+                c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (user_id,))
+                row = c.fetchone()
+                return row['affiliate_balance'] if row else 0.0
         elif balance_type == "reply":
-            return get_total_amount(user_id)
+            if VIRALMONITOR_AVAILABLE and get_total_amount:
+                return get_total_amount(user_id)
+            else:
+                # Fallback to reply_balances table
+                with get_connection(DB_FILE) as conn:
+                    c = conn.cursor()
+                    c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (user_id,))
+                    row = c.fetchone()
+                    return row['balance'] if row else 0.0
         else:
             logger.error(f"Invalid balance type: {balance_type}")
             return 0.0
     except Exception as e:
         logger.error(f"Error getting {balance_type} balance for user {user_id}: {e}")
+        return 0.0
         return 0.0
 
 def validate_withdrawal_request(user_id: int, balance_type: BalanceType, amount: float) -> tuple[bool, str]:

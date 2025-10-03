@@ -55,7 +55,7 @@ cd viralcore
 
 2. Install dependencies:
 ```bash
-pip install python-telegram-bot python-dotenv requests aiohttp
+pip install -r requirements.txt
 ```
 
 3. Configure environment variables:
@@ -64,17 +64,73 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-4. Run database migrations:
+4. Run database migrations and start the app:
 ```bash
-python3 scripts/migrate_database.py --backup --apply
-```
+# Option 1: Use the automated migration and startup script (recommended)
+./scripts/migrate_and_run.sh
 
-5. Start the bot:
-```bash
+# Option 2: Manual migration and startup
+python3 scripts/migrate_database.py --backup --apply
 python3 main_viral_core_bot.py
 ```
 
+### Database Centralization
+
+All SQLite database files are now stored in a centralized `./db` directory. This includes:
+- `viralcore.db` - Main database
+- `tweets.db` - Tweet engagement tracking
+- `tg.db` - Telegram engagement tracking
+- `groups.db` - Group management
+- `custom.db` - Custom plans
+
+The database directory location can be configured via the `DB_DIR` environment variable (default: `./db`).
+
+**Migration from older versions:**
+- The migration script (`migrate_and_run.sh` or `migrate_database.py`) automatically detects and migrates existing `.db` files from the project root to `./db`
+- Original files are backed up to `./db/backups/` with timestamps
+- The migration is idempotent and safe to run multiple times
+
+### Withdrawal System Enhancements
+
+**Admin Approval for Withdrawals:**
+- All withdrawal requests (both manual and automatic) now require admin approval by default
+- Set `DISABLE_ADMIN_APPROVAL=true` in `.env` to bypass approval (for testing/staging only)
+- Admins receive notifications via Telegram, Email, or Slack when withdrawals are requested
+
+**Error Handling & Notifications:**
+- Failed withdrawal attempts are logged with full error details and correlation IDs
+- Administrators are immediately notified of failures via configured channels
+- Automatic retry with configurable backoff (see `WITHDRAWAL_RETRY_COUNT` and `WITHDRAWAL_RETRY_BACKOFF_SEC`)
+
+**Balance Deduction:**
+- Fixed manual withdrawal deduction bug - balance is now correctly deducted atomically
+- Added validation to prevent withdrawals exceeding available balance
+- Idempotency prevents duplicate deductions
+
+**Configuration:**
+```bash
+# Withdrawal settings in .env
+DISABLE_ADMIN_APPROVAL=false          # Set to true to bypass approval
+WITHDRAWAL_RETRY_COUNT=3              # Number of retries for failed API calls
+WITHDRAWAL_RETRY_BACKOFF_SEC=60       # Seconds between retries
+
+# Admin notification settings
+ADMIN_GROUP_ENDPOINT=-4855378356      # Telegram group ID(s), comma-separated
+ADMIN_CONTACTS=admin@example.com      # Email addresses, comma-separated
+SLACK_WEBHOOK_URL=https://...         # Slack webhook (optional)
+```
+
 ## Running Tests
+
+### Database Centralization Tests
+```bash
+python3 tests/test_db_centralization.py
+```
+
+### Manual Withdrawal Tests
+```bash
+python3 tests/test_manual_withdrawal.py
+```
 
 ### Job System Tests
 ```bash

@@ -4,6 +4,7 @@
 
 import sqlite3
 import uuid
+import os
 import logging
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
@@ -149,6 +150,9 @@ class WithdrawalService:
             Created Withdrawal object
         """
         
+        # Check if admin approval is required
+        disable_admin_approval = os.getenv("DISABLE_ADMIN_APPROVAL", "false").lower() == "true"
+        
         # Create withdrawal object
         withdrawal = Withdrawal(
             user_id=user_id,
@@ -165,9 +169,13 @@ class WithdrawalService:
             updated_at=datetime.utcnow().isoformat()
         )
         
-        # Set approval state for manual payments
-        if payment_mode == PaymentMode.MANUAL:
+        # Set approval state - both manual AND automatic withdrawals require approval
+        # unless DISABLE_ADMIN_APPROVAL is set (for testing/staging)
+        if not disable_admin_approval:
             withdrawal.admin_approval_state = AdminApprovalState.PENDING
+            logger.info(f"Withdrawal created with pending admin approval (user {user_id}, amount ${amount_usd})")
+        else:
+            logger.warning(f"Admin approval disabled - withdrawal created without approval requirement")
         
         # Generate operation ID for idempotency
         withdrawal.operation_id = f"withdraw_{user_id}_{amount_usd}_{uuid.uuid4().hex[:8]}"
@@ -366,19 +374,70 @@ class WithdrawalService:
                     logger.warning(f"Manual withdrawal {withdrawal_id} is not in pending state: {withdrawal.admin_approval_state}")
                     return False
                 
-                # Deduct balance atomically
+                # Deduct balance directly within this transaction (to avoid nested transaction locks)
                 balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
-                success = atomic_withdraw_operation(
-                    user_id=withdrawal.user_id,
-                    balance_type=balance_type,
-                    amount=withdrawal.amount_usd,
-                    reason=f"Manual withdrawal approved by admin {admin_id}",
-                    operation_id=withdrawal.operation_id
-                )
                 
-                if not success:
-                    logger.error(f"Balance deduction failed for manual withdrawal {withdrawal_id}")
-                    return False
+                # Check if operation already completed (idempotency)
+                c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (withdrawal.operation_id,))
+                op_row = c.fetchone()
+                if op_row and op_row['status'] == 'completed':
+                    logger.info(f"Balance operation {withdrawal.operation_id} already completed")
+                else:
+                    # Get and check current balance
+                    if balance_type == "affiliate":
+                        c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['affiliate_balance'] if bal_row else 0.0
+                        
+                        if withdrawal.amount_usd > current_balance:
+                            logger.error(f"Insufficient affiliate balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
+                            conn.rollback()
+                            return False
+                        
+                        # Deduct balance
+                        new_balance = current_balance - withdrawal.amount_usd
+                        c.execute("UPDATE users SET affiliate_balance = ? WHERE id = ?", (new_balance, withdrawal.user_id))
+                        
+                    elif balance_type == "reply":
+                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['balance'] if bal_row else 0.0
+                        
+                        if withdrawal.amount_usd > current_balance:
+                            logger.error(f"Insufficient reply balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
+                            conn.rollback()
+                            return False
+                        
+                        # Deduct balance
+                        new_balance = current_balance - withdrawal.amount_usd
+                        c.execute("""
+                            INSERT OR REPLACE INTO reply_balances 
+                            (user_id, balance, total_posts, daily_posts) 
+                            VALUES (
+                                ?, 
+                                ?,
+                                COALESCE((SELECT total_posts FROM reply_balances WHERE user_id = ?), 0),
+                                COALESCE((SELECT daily_posts FROM reply_balances WHERE user_id = ?), 0)
+                            )
+                        """, (withdrawal.user_id, new_balance, withdrawal.user_id, withdrawal.user_id))
+                    
+                    # Record operation in ledger
+                    from datetime import datetime
+                    c.execute("""
+                        INSERT INTO balance_operations 
+                        (operation_id, user_id, balance_type, amount, operation_type, reason, timestamp, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+                    """, (
+                        withdrawal.operation_id,
+                        withdrawal.user_id,
+                        balance_type,
+                        -withdrawal.amount_usd,  # Negative for withdrawal
+                        "withdraw",
+                        f"Manual withdrawal approved by admin {admin_id}",
+                        datetime.utcnow().isoformat()
+                    ))
+                    
+                    logger.info(f"Balance deducted for manual withdrawal {withdrawal_id}: {withdrawal.amount_usd} from {balance_type}")
                 
                 # Update withdrawal
                 withdrawal.admin_approval_state = AdminApprovalState.APPROVED
@@ -671,8 +730,23 @@ class WithdrawalService:
                         
                     else:
                         # Flutterwave transfer failed - rollback balance
+                        error_code = response.get('code', 'FLUTTERWAVE_ERROR')
+                        error_message = response.get('error', 'Flutterwave transfer failed')
+                        correlation_id = str(uuid.uuid4())
+                        
                         withdrawal.status = WithdrawalStatus.FAILED
-                        withdrawal.failure_reason = response.get('error', 'Flutterwave transfer failed')
+                        withdrawal.failure_reason = error_message
+                        
+                        # Record error in database
+                        self._record_withdrawal_error(
+                            withdrawal_id=withdrawal.id,
+                            error_code=error_code,
+                            error_message=error_message,
+                            error_payload=response,
+                            request_id=response.get('request_id'),
+                            correlation_id=correlation_id,
+                            retry_count=0
+                        )
                         
                         # Rollback balance deduction
                         rollback_success = self._rollback_balance_deduction(withdrawal, final_conn)
@@ -685,17 +759,32 @@ class WithdrawalService:
                             action="failed-automatic",
                             old_status="processing",
                             new_status="failed",
-                            reason=f"Flutterwave API failed: {response.get('error')}",
+                            reason=f"Flutterwave API failed: {error_message}",
                             metadata={
                                 "mode": "automatic",
                                 "external_api_called": True,
-                                "api_error": response.get('error'),
+                                "api_error": error_message,
+                                "error_code": error_code,
+                                "correlation_id": correlation_id,
                                 "balance_rolled_back": rollback_success
                             },
                             conn=final_conn
                         )
                         
                         logger.error(f"Withdrawal {withdrawal.id} failed in automatic mode: {withdrawal.failure_reason}")
+                        
+                        # Send admin notification asynchronously
+                        import asyncio
+                        try:
+                            asyncio.create_task(self._notify_admin_of_error(
+                                withdrawal=withdrawal,
+                                error_code=error_code,
+                                error_message=error_message,
+                                correlation_id=correlation_id,
+                                error_payload=response
+                            ))
+                        except Exception as notify_error:
+                            logger.error(f"Failed to send error notification: {notify_error}")
                     
                     self._update_withdrawal_in_transaction(withdrawal, final_conn)
                     final_conn.commit()
@@ -704,11 +793,25 @@ class WithdrawalService:
                     
             except Exception as api_error:
                 # API call failed - rollback balance
+                error_code = "API_EXCEPTION"
+                error_message = str(api_error)
+                correlation_id = str(uuid.uuid4())
+                
                 with get_connection(DB_FILE) as rollback_conn:
                     rollback_conn.execute('BEGIN IMMEDIATE')
                     
                     withdrawal.status = WithdrawalStatus.FAILED
-                    withdrawal.failure_reason = f"API error: {str(api_error)}"
+                    withdrawal.failure_reason = f"API error: {error_message}"
+                    
+                    # Record error
+                    self._record_withdrawal_error(
+                        withdrawal_id=withdrawal.id,
+                        error_code=error_code,
+                        error_message=error_message,
+                        error_payload={"exception": str(api_error), "type": type(api_error).__name__},
+                        correlation_id=correlation_id,
+                        retry_count=0
+                    )
                     
                     rollback_success = self._rollback_balance_deduction(withdrawal, rollback_conn)
                     
@@ -718,11 +821,13 @@ class WithdrawalService:
                         action="failed-automatic",
                         old_status="processing",
                         new_status="failed",
-                        reason=f"API exception: {str(api_error)}",
+                        reason=f"API exception: {error_message}",
                         metadata={
                             "mode": "automatic",
                             "external_api_called": False,
-                            "api_exception": str(api_error),
+                            "api_exception": error_message,
+                            "error_code": error_code,
+                            "correlation_id": correlation_id,
                             "balance_rolled_back": rollback_success
                         },
                         conn=rollback_conn
@@ -731,7 +836,20 @@ class WithdrawalService:
                     self._update_withdrawal_in_transaction(withdrawal, rollback_conn)
                     rollback_conn.commit()
                     
-                    logger.error(f"Withdrawal {withdrawal.id} failed with API error: {str(api_error)}")
+                    logger.error(f"Withdrawal {withdrawal.id} failed with API error: {error_message}")
+                    
+                    # Send admin notification
+                    import asyncio
+                    try:
+                        asyncio.create_task(self._notify_admin_of_error(
+                            withdrawal=withdrawal,
+                            error_code=error_code,
+                            error_message=error_message,
+                            correlation_id=correlation_id
+                        ))
+                    except Exception as notify_error:
+                        logger.error(f"Failed to send error notification: {notify_error}")
+                    
                     return False
                     
         except Exception as e:
@@ -925,6 +1043,99 @@ class WithdrawalService:
             withdrawal_id, admin_id, action, old_status, new_status,
             old_approval_state, new_approval_state, reason, metadata_json
         ))
+    
+    def _record_withdrawal_error(
+        self,
+        withdrawal_id: int,
+        error_code: str,
+        error_message: str,
+        error_payload: Dict[str, Any] = None,
+        request_id: str = None,
+        correlation_id: str = None,
+        retry_count: int = 0
+    ) -> int:
+        """
+        Record withdrawal error in database.
+        
+        Returns:
+            Error record ID
+        """
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            
+            import json
+            error_payload_json = json.dumps(error_payload) if error_payload else None
+            
+            c.execute('''
+                INSERT INTO withdrawal_errors (
+                    withdrawal_id, error_code, error_message, error_payload,
+                    request_id, correlation_id, retry_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                withdrawal_id, error_code, error_message, error_payload_json,
+                request_id, correlation_id, retry_count
+            ))
+            
+            error_id = c.lastrowid
+            conn.commit()
+            
+            logger.info(f"Recorded withdrawal error {error_id} for withdrawal {withdrawal_id}")
+            return error_id
+    
+    async def _notify_admin_of_error(
+        self,
+        withdrawal: Withdrawal,
+        error_code: str,
+        error_message: str,
+        correlation_id: str,
+        error_payload: Dict[str, Any] = None
+    ):
+        """Send error notification to admin group."""
+        try:
+            from utils.notification_service import get_notification_service, NotificationMessage
+            
+            notification = NotificationMessage(
+                title=f"❌ Withdrawal {withdrawal.id} Failed",
+                body=f"""
+Withdrawal request failed with error.
+
+**User ID:** {withdrawal.user_id}
+**Amount:** ${withdrawal.amount_usd} USD / ₦{withdrawal.amount_ngn} NGN
+**Account:** {withdrawal.account_name} - {withdrawal.account_number}
+**Bank:** {withdrawal.bank_name}
+**Error Code:** {error_code}
+**Error:** {error_message}
+**Payment Mode:** {withdrawal.payment_mode.value}
+""".strip(),
+                correlation_id=correlation_id,
+                priority="high",
+                metadata={
+                    "withdrawal_id": withdrawal.id,
+                    "user_id": withdrawal.user_id,
+                    "amount_usd": withdrawal.amount_usd,
+                    "error_code": error_code,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+            
+            notification_service = get_notification_service()
+            await notification_service.send_notification(notification)
+            
+            logger.info(f"Sent error notification for withdrawal {withdrawal.id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send error notification for withdrawal {withdrawal.id}: {e}", exc_info=True)
+    
+    def _get_retry_config(self) -> tuple[int, int]:
+        """
+        Get retry configuration from environment.
+        
+        Returns:
+            (retry_count, backoff_seconds)
+        """
+        retry_count = int(os.getenv("WITHDRAWAL_RETRY_COUNT", "3"))
+        backoff_sec = int(os.getenv("WITHDRAWAL_RETRY_BACKOFF_SEC", "60"))
+        return retry_count, backoff_sec
 
 
 # Global service instance cache

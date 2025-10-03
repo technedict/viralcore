@@ -1,13 +1,21 @@
 import sqlite3
+import os
+from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
 from datetime import datetime
 
-# Database file paths
-DB_FILE = "viralcore.db"
-TWEETS_DB_FILE = "tweets.db"
-TG_DB_FILE = "tg.db"
-GROUPS_TWEETS_DB_FILE = "groups.db"
-CUSTOM_DB_FILE = "custom.db"
+# Database directory - centralize all .db files here
+DB_DIR = os.getenv("DB_DIR", "./db")
+
+# Ensure DB directory exists
+Path(DB_DIR).mkdir(parents=True, exist_ok=True)
+
+# Database file paths - all in centralized directory
+DB_FILE = str(Path(DB_DIR) / "viralcore.db")
+TWEETS_DB_FILE = str(Path(DB_DIR) / "tweets.db")
+TG_DB_FILE = str(Path(DB_DIR) / "tg.db")
+GROUPS_TWEETS_DB_FILE = str(Path(DB_DIR) / "groups.db")
+CUSTOM_DB_FILE = str(Path(DB_DIR) / "custom.db")
 
 
 # (Optional) You might want to define constants for plan types
@@ -798,3 +806,63 @@ def mark_transaction_hash_as_processed(transaction_hash: str, user_id: int) -> N
         )
         conn.commit()
     print(f"Transaction hash {transaction_hash} marked as processed for user {user_id}.")
+
+# --- DB Migration Utilities ---
+
+def migrate_db_files_to_directory() -> bool:
+    """
+    Migrate existing .db files from root to DB_DIR with backups.
+    Safe to call multiple times (idempotent).
+    
+    Returns:
+        True if migration successful or not needed, False otherwise
+    """
+    import shutil
+    from datetime import datetime
+    
+    root_dir = Path(__file__).parent.parent
+    db_files = ["viralcore.db", "tweets.db", "tg.db", "groups.db", "custom.db"]
+    
+    migrated = False
+    
+    for db_file in db_files:
+        old_path = root_dir / db_file
+        new_path = Path(DB_DIR) / db_file
+        
+        # Skip if old file doesn't exist
+        if not old_path.exists():
+            continue
+            
+        # Skip if already in correct location
+        if old_path.resolve() == new_path.resolve():
+            continue
+        
+        try:
+            # Create backup directory
+            backup_dir = Path(DB_DIR) / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create timestamped backup
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = backup_dir / f"{db_file}.backup_{timestamp}"
+            
+            # Copy old file to backup
+            shutil.copy2(old_path, backup_path)
+            print(f"✅ Backed up {db_file} to {backup_path}")
+            
+            # Move to new location
+            shutil.move(str(old_path), str(new_path))
+            print(f"✅ Migrated {db_file} to {new_path}")
+            
+            migrated = True
+            
+        except Exception as e:
+            print(f"❌ Failed to migrate {db_file}: {e}")
+            return False
+    
+    if migrated:
+        print(f"✅ Database files migrated to {DB_DIR}")
+    else:
+        print(f"ℹ️  No database files to migrate (already in {DB_DIR})")
+    
+    return True

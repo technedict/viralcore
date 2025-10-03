@@ -2,6 +2,132 @@
 
 All notable changes to ViralCore Bot will be documented in this file.
 
+## [2.2.0] - 2025-01-XX - Database Centralization & Enhanced Withdrawal System
+
+### 🗄️ **Database Centralization**
+
+#### **Centralized Database Directory**
+- **NEW**: All SQLite `.db` files now stored in centralized `./db` directory
+- Added `DB_DIR` environment variable (default: `./db`)
+- Automatic database directory creation on startup
+- Automatic migration of existing `.db` files to centralized directory with timestamped backups
+- Updated all database file paths to use pathlib for cross-platform compatibility
+
+#### **Migration Script**
+- Created `migrate_and_run.sh` - robust shell script for migration and startup
+- Loads `.env` configuration
+- Creates `./db` directory if missing
+- Runs database schema migrations
+- Migrates existing `.db` files to `./db` with backup
+- Starts Python application with production command
+- Idempotent and safe to re-run
+- Added comprehensive error handling and logging
+
+### 💸 **Enhanced Withdrawal System**
+
+#### **Admin Approval for All Withdrawals**
+- **BREAKING**: Automatic withdrawals now require admin approval (same as manual withdrawals)
+- Added `DISABLE_ADMIN_APPROVAL` environment variable for backwards compatibility (testing/staging)
+- Both manual and automatic withdrawals create `pending_admin_approval` status
+- Only approved withdrawals call Flutterwave API for automatic mode
+- Complete audit trail with admin ID, approval timestamp, and comments
+
+#### **Error Handling & Notifications**
+- Created `withdrawal_errors` table for comprehensive error tracking
+- Capture full error payload from Flutterwave API failures
+- Record correlation IDs for all withdrawal operations
+- Send detailed error notifications to admin group on failures
+- Added retry policy with configurable settings:
+  - `WITHDRAWAL_RETRY_COUNT` (default: 3)
+  - `WITHDRAWAL_RETRY_BACKOFF_SEC` (default: 60)
+
+#### **Multi-Channel Notification Service**
+- Created `NotificationService` abstraction for multi-channel alerts
+- Support for Telegram, Email (SMTP), and Slack webhooks
+- Configurable via environment variables:
+  - `ADMIN_GROUP_ENDPOINT` - Comma-separated Telegram group IDs
+  - `ADMIN_CONTACTS` - Comma-separated admin email addresses
+  - `SLACK_WEBHOOK_URL` - Slack webhook URL
+- Include correlation IDs and actionable data in all notifications
+- Smart MarkdownV2 escaping for Telegram messages
+- HTML email templates with structured metadata
+
+#### **Fixed Manual Withdrawal Bug**
+- **FIX**: Manual withdrawal balance deduction now works correctly
+- Resolved database locking issue with nested transactions
+- Inline balance deduction logic for atomic operations
+- Added validation to prevent withdrawals exceeding available balance
+- Idempotency protection prevents duplicate deductions
+- Comprehensive test coverage verifying:
+  - Correct balance deduction
+  - Insufficient balance handling
+  - Idempotency (duplicate approval prevention)
+
+### 🧪 **Testing & Quality**
+
+#### **New Tests**
+- `tests/test_db_centralization.py` - Database centralization tests
+- `tests/test_manual_withdrawal.py` - Manual withdrawal deduction tests (all passing)
+- Verified balance operations under concurrent requests
+- Added integration tests for withdrawal flows
+
+#### **Documentation**
+- Updated README with migration steps and new features
+- Created comprehensive `.env.example` with all configuration options
+- Added migration notes and backward compatibility information
+- Documented all new environment variables
+
+### 🔧 **Technical Improvements**
+
+#### **Dependencies**
+- Made `viralmonitor` module optional with graceful fallback
+- Added fallback for reply balance operations when viralmonitor unavailable
+- Improved error handling for missing dependencies
+
+#### **Configuration**
+- All new environment variables documented in `.env.example`
+- Clear separation of required vs optional configuration
+- Sensible defaults for all new settings
+
+### 📝 **Migration Guide**
+
+**For Existing Installations:**
+
+1. **Update environment variables:**
+   ```bash
+   cp .env.example .env.new
+   # Merge your existing .env settings into .env.new
+   ```
+
+2. **Run migration:**
+   ```bash
+   # Automated (recommended)
+   ./scripts/migrate_and_run.sh
+   
+   # Manual
+   python3 scripts/migrate_database.py --backup --apply
+   ```
+
+3. **Configure admin notifications:**
+   ```bash
+   # In .env
+   ADMIN_GROUP_ENDPOINT=-4855378356
+   ADMIN_CONTACTS=admin@example.com
+   ```
+
+4. **Test withdrawal flows:**
+   ```bash
+   python3 tests/test_manual_withdrawal.py
+   ```
+
+**Backwards Compatibility:**
+- Database files will be automatically migrated to `./db`
+- Original files are backed up to `./db/backups/`
+- To disable admin approval for withdrawals (testing only):
+  ```bash
+  DISABLE_ADMIN_APPROVAL=true
+  ```
+
 ## [2.1.1] - 2025-09-26 - Security Audit & Refactor
 
 ### 🔒 **CRITICAL SECURITY FIXES**
