@@ -28,9 +28,9 @@ ENV/
 .venv/
 
 # IDEs
-.code-workspace
 .vscode/
 .idea/
+*.code-workspace
 *.swp
 *.swo
 *~
