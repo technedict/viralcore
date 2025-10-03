@@ -28,6 +28,7 @@ ENV/
 .venv/
 
 # IDEs
+.code-workspace
 .vscode/
 .idea/
 *.swp
@@ -39,7 +40,7 @@ ENV/
 *.sqlite3.backup_*
 *.db
 
-# Log files (keep main logs but exclude temporary ones)
+# Log files
 *.log
 *.log.*
 *.log.1
