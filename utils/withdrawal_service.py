@@ -374,19 +374,70 @@ class WithdrawalService:
                     logger.warning(f"Manual withdrawal {withdrawal_id} is not in pending state: {withdrawal.admin_approval_state}")
                     return False
                 
-                # Deduct balance atomically
+                # Deduct balance directly within this transaction (to avoid nested transaction locks)
                 balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
-                success = atomic_withdraw_operation(
-                    user_id=withdrawal.user_id,
-                    balance_type=balance_type,
-                    amount=withdrawal.amount_usd,
-                    reason=f"Manual withdrawal approved by admin {admin_id}",
-                    operation_id=withdrawal.operation_id
-                )
                 
-                if not success:
-                    logger.error(f"Balance deduction failed for manual withdrawal {withdrawal_id}")
-                    return False
+                # Check if operation already completed (idempotency)
+                c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (withdrawal.operation_id,))
+                op_row = c.fetchone()
+                if op_row and op_row['status'] == 'completed':
+                    logger.info(f"Balance operation {withdrawal.operation_id} already completed")
+                else:
+                    # Get and check current balance
+                    if balance_type == "affiliate":
+                        c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['affiliate_balance'] if bal_row else 0.0
+                        
+                        if withdrawal.amount_usd > current_balance:
+                            logger.error(f"Insufficient affiliate balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
+                            conn.rollback()
+                            return False
+                        
+                        # Deduct balance
+                        new_balance = current_balance - withdrawal.amount_usd
+                        c.execute("UPDATE users SET affiliate_balance = ? WHERE id = ?", (new_balance, withdrawal.user_id))
+                        
+                    elif balance_type == "reply":
+                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['balance'] if bal_row else 0.0
+                        
+                        if withdrawal.amount_usd > current_balance:
+                            logger.error(f"Insufficient reply balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
+                            conn.rollback()
+                            return False
+                        
+                        # Deduct balance
+                        new_balance = current_balance - withdrawal.amount_usd
+                        c.execute("""
+                            INSERT OR REPLACE INTO reply_balances 
+                            (user_id, balance, total_posts, daily_posts) 
+                            VALUES (
+                                ?, 
+                                ?,
+                                COALESCE((SELECT total_posts FROM reply_balances WHERE user_id = ?), 0),
+                                COALESCE((SELECT daily_posts FROM reply_balances WHERE user_id = ?), 0)
+                            )
+                        """, (withdrawal.user_id, new_balance, withdrawal.user_id, withdrawal.user_id))
+                    
+                    # Record operation in ledger
+                    from datetime import datetime
+                    c.execute("""
+                        INSERT INTO balance_operations 
+                        (operation_id, user_id, balance_type, amount, operation_type, reason, timestamp, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+                    """, (
+                        withdrawal.operation_id,
+                        withdrawal.user_id,
+                        balance_type,
+                        -withdrawal.amount_usd,  # Negative for withdrawal
+                        "withdraw",
+                        f"Manual withdrawal approved by admin {admin_id}",
+                        datetime.utcnow().isoformat()
+                    ))
+                    
+                    logger.info(f"Balance deducted for manual withdrawal {withdrawal_id}: {withdrawal.amount_usd} from {balance_type}")
                 
                 # Update withdrawal
                 withdrawal.admin_approval_state = AdminApprovalState.APPROVED
