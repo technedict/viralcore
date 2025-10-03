@@ -40,6 +40,7 @@ ENV/
 *.db
 
 # Log files (keep main logs but exclude temporary ones)
+*.log
 *.log.*
 *.log.1
 *.log.2
