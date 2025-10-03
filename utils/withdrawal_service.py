@@ -204,6 +204,9 @@ class WithdrawalService:
         """
         Process automatic withdrawal using Flutterwave API.
         
+        DEPRECATED: This method should not be called directly. Use approve_withdrawal_by_mode instead.
+        This ensures proper admin approval workflow is followed.
+        
         Args:
             withdrawal: Withdrawal to process
             
@@ -211,8 +214,23 @@ class WithdrawalService:
             True if successful, False otherwise
         """
         
+        logger.warning(
+            f"process_automatic_withdrawal called directly for withdrawal {withdrawal.id}. "
+            "This method is deprecated - use approve_withdrawal_by_mode instead to ensure approval workflow."
+        )
+        
         if withdrawal.payment_mode != PaymentMode.AUTOMATIC:
             raise ValueError("Cannot process manual withdrawal as automatic")
+        
+        # CRITICAL: Check that withdrawal has been approved
+        # This prevents premature API calls before admin approval
+        if withdrawal.admin_approval_state != AdminApprovalState.APPROVED:
+            error_msg = (
+                f"Cannot process withdrawal {withdrawal.id} - admin approval required. "
+                f"Current state: {withdrawal.admin_approval_state}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         try:
             # Update status to processing
@@ -688,6 +706,12 @@ class WithdrawalService:
             # Save processing state first
             self._update_withdrawal_in_transaction(withdrawal, conn)
             conn.commit()  # Commit the processing state
+            
+            # Defensive check: verify status is PROCESSING before calling external API
+            if withdrawal.status != WithdrawalStatus.PROCESSING:
+                error_msg = f"Cannot call Flutterwave API - withdrawal status is {withdrawal.status.value}, expected PROCESSING"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             
             # Now call Flutterwave API (outside transaction)
             try:
