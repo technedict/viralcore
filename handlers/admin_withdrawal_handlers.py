@@ -163,9 +163,8 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         user_row = c.fetchone()
         username = user_row[0] if user_row else f"User_{withdrawal.user_id}"
     
-    # Get current withdrawal mode for display
-    from utils.withdrawal_settings import get_withdrawal_mode_display
-    current_mode = get_withdrawal_mode_display()
+    # Determine payment mode for this withdrawal
+    payment_mode_text = "Automatic" if withdrawal.payment_mode == PaymentMode.AUTOMATIC else "Manual"
     
     withdrawal_text = (
         f"💰 *Withdrawal Request*\n\n"
@@ -174,15 +173,23 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
         f"• User: [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
         f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
         f"• Type: {escape_markdown_v2('Affiliate' if withdrawal.is_affiliate_withdrawal else 'Standard')}\n"
+        f"• Payment Mode: *{escape_markdown_v2(payment_mode_text)}*\n"
         f"• Created: {escape_markdown_v2(withdrawal.created_at[:19].replace('T', ' '))}\n\n"
         f"🏦 **Bank Details:**\n"
         f"• Name: {escape_markdown_v2(withdrawal.account_name)}\n"
         f"• Number: `{withdrawal.account_number}`\n"
         f"• Bank: {escape_markdown_v2(withdrawal.bank_name)}\n\n"
-        f"**Current Mode:** {current_mode}\n\n"
         f"**Raw Details:**\n`{escape_markdown_v2(withdrawal.bank_details_raw)}`\n\n"
-        f"Remaining requests: {len(pending_withdrawals)}"
     )
+    
+    # Add mode-specific note
+    if withdrawal.payment_mode == PaymentMode.AUTOMATIC:
+        withdrawal_text += f"⚡ *Note:* Approving will automatically initiate Flutterwave transfer\n\n"
+    else:
+        withdrawal_text += f"📝 *Note:* Manual payment \\- you will handle the transfer externally\n\n"
+    
+    withdrawal_text += f"Remaining requests: {len(pending_withdrawals)}"
+
     
     keyboard = [
         [
@@ -203,7 +210,7 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
     context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
 async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle manual withdrawal approval."""
+    """Handle withdrawal approval for both manual and automatic modes."""
     query = update.callback_query
     await query.answer()
     
@@ -230,10 +237,8 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
         msg = await query.message.reply_text("❌ Withdrawal not found.")
         return
     
-    if withdrawal.payment_mode != PaymentMode.MANUAL:
-        msg = await query.message.reply_text("❌ This is not a manual withdrawal.")
-        return
-    
+    # Check if withdrawal is pending approval
+    # Note: Both manual and automatic withdrawals now require admin approval
     if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
         msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\).", parse_mode=ParseMode.MARKDOWN_V2)
         return
@@ -254,15 +259,24 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
             user_row = c.fetchone()
             username = user_row[0] if user_row else f"User_{withdrawal.user_id}"
         
+        # Build success message based on payment mode
+        mode_text = "Automatic" if withdrawal.payment_mode == PaymentMode.AUTOMATIC else "Manual"
+        
         success_text = (
             f"✅ *Withdrawal Approved Successfully\\!*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
             f"• User:  [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
             f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
+            f"• Mode: *{escape_markdown_v2(mode_text)}*\n"
             f"• Balance deducted successfully\n"
-            f"• User will be notified"
         )
+        
+        # Add mode-specific information
+        if withdrawal.payment_mode == PaymentMode.AUTOMATIC:
+            success_text += f"• Flutterwave transfer initiated automatically\n"
+        
+        success_text += f"• User will be notified"
         
         keyboard = [
             [InlineKeyboardButton("📋 View More Pending", callback_data="admin_withdrawals_pending")],
