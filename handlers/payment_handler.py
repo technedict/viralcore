@@ -49,6 +49,58 @@ class PaymentHandler:
         # API keys are best accessed directly from APIConfig
         # or passed if the handler is initialized per-request context (less common for singletons)
 
+    def _log_verification_attempt(
+        self,
+        tx_hash: str,
+        expected_address: str,
+        expected_amount_usd: float,
+        crypto_type: str,
+        expected_token: Optional[str],
+        correlation_id: Optional[str] = None
+    ) -> None:
+        """Log structured verification attempt details."""
+        logger.info(
+            "Payment verification attempt",
+            extra={
+                "correlation_id": correlation_id or f"verify_{tx_hash[:8]}",
+                "tx_hash": tx_hash,
+                "expected_address": expected_address,
+                "expected_amount_usd": expected_amount_usd,
+                "crypto_type": crypto_type,
+                "expected_token": expected_token,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
+    def _log_verification_result(
+        self,
+        tx_hash: str,
+        status: str,
+        received_amount: Optional[float] = None,
+        received_amount_usd: Optional[float] = None,
+        from_address: Optional[str] = None,
+        to_address: Optional[str] = None,
+        confirmations: Optional[int] = None,
+        message: Optional[str] = None,
+        correlation_id: Optional[str] = None
+    ) -> None:
+        """Log structured verification result."""
+        logger.info(
+            f"Payment verification result: {status}",
+            extra={
+                "correlation_id": correlation_id or f"verify_{tx_hash[:8]}",
+                "tx_hash": tx_hash,
+                "status": status,
+                "received_amount": received_amount,
+                "received_amount_usd": received_amount_usd,
+                "from_address": from_address,
+                "to_address": to_address,
+                "confirmations": confirmations,
+                "message": message,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
+
     # --- Public Payment Initiation Methods ---
 
     async def initiate_crypto_payment_flow(
@@ -410,6 +462,24 @@ class PaymentHandler:
         """Generates a unique invoice ID."""
         return f"INV-{user_id}-{uuid.uuid4().hex[:8].upper()}"
 
+    def _normalize_address(self, address: str, crypto_type: str) -> str:
+        """
+        Normalize blockchain address for comparison.
+        For EVM chains (BSC, Ethereum), convert to lowercase for case-insensitive comparison.
+        For other chains, return as-is.
+        """
+        if crypto_type in ["bnb", "bsc", "eth", "aptos"]:
+            # EVM-style addresses - use lowercase for comparison
+            return address.lower().strip()
+        elif crypto_type == "sol":
+            # Solana addresses are case-sensitive, return as-is
+            return address.strip()
+        elif crypto_type == "trx":
+            # Tron addresses are case-sensitive, return as-is
+            return address.strip()
+        else:
+            return address.lower().strip()
+
     def _validate_tx_hash_format(self, tx_hash: str, crypto_type: str) -> bool:
         """Performs basic regex validation for transaction hash format."""
         h = tx_hash.strip()
@@ -437,22 +507,51 @@ class PaymentHandler:
         Dispatches to network-specific verification methods (BSC, Solana, Tron, Aptos).
         Adds common logic for amount and age validation.
         """
+        # Generate correlation ID for tracing
+        correlation_id = f"verify_{tx_hash[:8]}_{uuid.uuid4().hex[:6]}"
+        
+        # Log verification attempt with structured data
+        self._log_verification_attempt(
+            tx_hash=tx_hash,
+            expected_address=expected_address,
+            expected_amount_usd=expected_amount_usd,
+            crypto_type=crypto_type,
+            expected_token=expected_token_symbol,
+            correlation_id=correlation_id
+        )
+        
         now_unix_timestamp = int(datetime.now(timezone.utc).timestamp())
         max_tx_age_minutes = self.TX_HASH_TIMEOUT // 60 # Use the class-wide timeout for relevance
 
         try:
             if crypto_type == "bnb":
-                return self._check_bsc(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol, token_decimals)
+                result = self._check_bsc(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol, token_decimals)
             elif crypto_type == "sol":
-                return self._check_solana(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol)
+                result = self._check_solana(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol)
             elif crypto_type == "trx":
-                return self._check_tron(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol)
+                result = self._check_tron(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol)
             elif crypto_type == "aptos":
-                return self._check_aptos(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol)
+                result = self._check_aptos(tx_hash, expected_address, expected_amount_usd, now_unix_timestamp, max_tx_age_minutes, expected_token_symbol)
             else:
-                return {"status": "error", "message": "Unsupported blockchain for verification."}
+                result = {"status": "error", "message": "Unsupported blockchain for verification."}
+            
+            # Log verification result
+            tx_data = result.get("transaction", {})
+            self._log_verification_result(
+                tx_hash=tx_hash,
+                status=result.get("status", "unknown"),
+                received_amount=tx_data.get("value"),
+                received_amount_usd=tx_data.get("value_usd"),
+                from_address=tx_data.get("from"),
+                to_address=tx_data.get("to"),
+                confirmations=tx_data.get("confirmations"),
+                message=result.get("message"),
+                correlation_id=correlation_id
+            )
+            
+            return result
         except Exception as e:
-            logger.error(f"Blockchain verification error for {crypto_type} (hash: {tx_hash}): {e}", exc_info=True)
+            logger.error(f"Blockchain verification error for {crypto_type} (hash: {tx_hash}): {e}", exc_info=True, extra={"correlation_id": correlation_id})
             return {"status": "error", "message": f"An internal error occurred during verification: {str(e)}"}
 
     # --- Private Blockchain Verification Methods (Keep as is, but ensure `APIConfig` usage) ---
@@ -463,6 +562,11 @@ class PaymentHandler:
     def _check_bsc(self, tx_hash: str, wallet: str, expected_amount_usd: float, now: int, max_age: int, expected_token: Optional[str], token_decimals: int = 18) -> Dict[str, Any]:
         """Check transaction on Binance Smart Chain (BSC)."""
         url = "https://api.bscscan.com/api"
+        
+        # Normalize wallet address for comparison
+        wallet_normalized = self._normalize_address(wallet, "bnb")
+        tx_hash_normalized = tx_hash.lower().strip()
+        
         # For USDT BEP20, action is 'tokentx' and address is the wallet itself (looking for incoming token transfers)
         # For native BNB, action is 'txlist'
         if expected_token == "USDT":
@@ -504,17 +608,21 @@ class PaymentHandler:
                     found_matching_tx = False
                     for tx in transactions:
                         # Filter for incoming transactions to our wallet
-                        current_tx_hash = tx.get("hash", "").lower()
-                        current_tx_to_address = tx.get("to", "").lower()
+                        current_tx_hash = tx.get("hash", "").lower().strip()
+                        current_tx_to_address = self._normalize_address(tx.get("to", ""), "bnb")
 
-                        logger.debug(f"Comparing: {current_tx_hash} == {tx_hash.lower()} and {current_tx_to_address} == {wallet.lower()}")
+                        logger.debug(f"Comparing: {current_tx_hash} == {tx_hash_normalized} and {current_tx_to_address} == {wallet_normalized}")
 
-                        if current_tx_hash == tx_hash.lower() and current_tx_to_address == wallet.lower():
+                        if current_tx_hash == tx_hash_normalized and current_tx_to_address == wallet_normalized:
                             found_matching_tx = True
                             # For token transfers, ensure it's the expected token
-                            if expected_token == "USDT" and tx.get("tokenSymbol") != "BSC-USD":
-                                logger.warning(f"Found transaction with matching hash but unexpected token symbol: {tx.get('tokenSymbol')}")
-                                continue # Skip if not USDT, continue looking for others in the list
+                            # USDT on BSC can be "USDT", "BSC-USD", or other variations depending on the token contract
+                            if expected_token == "USDT":
+                                token_symbol = tx.get("tokenSymbol", "").upper()
+                                # Accept common USDT symbols on BSC
+                                if token_symbol not in ["USDT", "BSC-USD", "USD"]:
+                                    logger.warning(f"Found transaction with matching hash but unexpected token symbol: {token_symbol} (expected USDT variants)")
+                                    continue # Skip if not USDT, continue looking for others in the list
 
                             # Value is typically in smallest unit (e.g., wei for ETH/BNB, or 10^decimals for tokens)
                             tx_value_raw = int(tx.get("value", 0))
@@ -591,8 +699,13 @@ class PaymentHandler:
         return {"status": "not_found", "message": "No matching incoming transaction found on BSCScan after all retries."}
 
     def _check_solana(self, tx_hash: str, wallet: str, expected_amount_usd: float, now: int, max_age: int, expected_token: Optional[str]) -> Dict[str, Any]:
+        """Check transaction on Solana blockchain."""
         headers = {"accept": "application/json"}
         sol_url = f"https://api.solana.fm/v0/transfers/{tx_hash}"
+        
+        # Normalize wallet address for comparison (Solana addresses are case-sensitive but we trim whitespace)
+        wallet_normalized = self._normalize_address(wallet, "sol")
+        
         try:
             response = self.session.get(sol_url, headers=headers, timeout=10)
             response.raise_for_status()
@@ -602,8 +715,9 @@ class PaymentHandler:
                 transactions = data["result"]["data"]
 
                 for tx in transactions:
-                    # Filter for incoming transfers to our wallet
-                    if tx.get("destination", "").lower() != wallet.lower():
+                    # Filter for incoming transfers to our wallet (normalize for comparison)
+                    tx_destination = self._normalize_address(tx.get("destination", ""), "sol")
+                    if tx_destination != wallet_normalized:
                         continue
                     
                     # For SOL, 'transfer' action for native SOL. For USDT, 'transferChecked'
