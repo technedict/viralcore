@@ -137,19 +137,22 @@ async def admin_pending_withdrawals_handler(update: Update, context: ContextType
     # Get all pending withdrawals
     pending_withdrawals = get_withdrawal_service().get_pending_withdrawals()
 
-    pendin_text = f"✅ *No Pending Withdrawals*\n\n All withdrawal requests have been processed\\.",
+    pending_text = f"✅ *No Pending Withdrawals*\n\n All withdrawal requests have been processed\\.",
     
     if not pending_withdrawals:
         keyboard = [
             [InlineKeyboardButton("⬅️ Back to Withdrawals Menu", callback_data="admin_withdrawals_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        msg = await query.message.reply_text(
-            pending_withdrawals,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
+        try:
+            msg = await query.message.reply_text(
+                pending_withdrawals,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+        except Exception as e:
+            logger.error(f"Error sending no pending withdrawals message: {e}")
+            msg = await query.message.reply_text("❌ An error occurred while fetching pending withdrawals.")
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         return
     
