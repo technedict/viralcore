@@ -304,7 +304,7 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
 
 async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle manual withdrawal rejection."""
+    """Handle withdrawal rejection for both manual and automatic modes."""
     query = update.callback_query
     await query.answer()
     
@@ -331,16 +331,14 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
         msg = await query.message.reply_text("❌ Withdrawal not found.")
         return
     
-    if withdrawal.payment_mode != PaymentMode.MANUAL:
-        msg = await query.message.reply_text("❌ This is not a manual withdrawal.")
-        return
-    
+    # Check if withdrawal is pending approval
+    # Note: Both manual and automatic withdrawals can be rejected
     if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
         msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\)\\.", parse_mode=ParseMode.MARKDOWN_V2)
         return
     
-    # Reject the withdrawal
-    success = get_withdrawal_service().reject_manual_withdrawal(
+    # Reject the withdrawal using the generic method
+    success = get_withdrawal_service().reject_withdrawal(
         withdrawal_id=withdrawal_id,
         admin_id=user.id,
         reason=f"Rejected by admin {user.username or user.first_name}"
@@ -355,12 +353,16 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
             user_row = c.fetchone()
             username = user_row[0] if user_row else f"User_{withdrawal.user_id}"
         
+        # Build rejection message with payment mode
+        mode_text = "Automatic" if withdrawal.payment_mode == PaymentMode.AUTOMATIC else "Manual"
+        
         success_text = (
             f"❌ *Withdrawal Rejected*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
             f"• User: [{escape_markdown_v2(username)}], {withdrawal.user_id}\n"
             f"• Amount: *₦{int(withdrawal.amount_ngn)}*\n"
+            f"• Mode: *{escape_markdown_v2(mode_text)}*\n"
             f"• Status: Rejected\n"
             f"• User will be notified"
         )
