@@ -512,54 +512,41 @@ async def custom_order_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             
             logger.info(f"Withdrawal {withdrawal.id} created for user {user_id} in {payment_mode.value} mode")
             
-            # Handle automatic vs manual processing
-            if payment_mode == PaymentMode.AUTOMATIC:
-                # Process automatically with Flutterwave
-                success = withdrawal_service.process_automatic_withdrawal(withdrawal)
-                
-                if success:
-                    await update.message.reply_text(
-                        f"✅ *Withdrawal Processed Successfully\\!*\n\n"
-                        f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
-                        f"Your balance has been updated and the transfer has been initiated\\.",
-                        parse_mode=ParseMode.MARKDOWN_V2
-                    )
-                else:
-                    await update.message.reply_text(
-                        "❌ *Withdrawal Processing Failed*\n\n"
-                        "There was an issue processing your withdrawal\\. "
-                        "Please contact support if this continues\\.",
-                        parse_mode=ParseMode.MARKDOWN_V2
-                    )
+            # ALL withdrawals (both automatic and manual) now require admin approval
+            # This prevents premature API calls and ensures proper oversight
             
-            else:  # Manual processing
-                # Notify admin for manual approval
-                escaped_bank_details_for_display = escape_markdown_v2(bank_details_raw_input)
-                
-                admin_approval_message = (
-                    f"🔔 *NEW MANUAL WITHDRAWAL REQUEST\\!* 🔔\n\n"
-                    f"User: [{escape_markdown_v2(user_first_name)}](tg://user?id={user_id})"
-                    f"{f' \\(@{escape_markdown_v2(user_username)}\\)' if user_username else ''}\n"
-                    f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
-                    f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
-                    f"Bank Details:\n`{escaped_bank_details_for_display}`\n\n"
-                    f"Request ID: `{withdrawal.id}`\n\n"
-                    f"⚠️ *Manual processing* \\- Balance will be deducted only upon approval\\."
-                )
+            # Notify user that approval is required
+            await update.message.reply_text(
+                f"✅ *Withdrawal Request Submitted Successfully\\!*\n\n"
+                f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
+                f"Mode: *{payment_mode.value.title()}*\n\n"
+                f"Your withdrawal request has been submitted and is pending admin approval\\. "
+                f"You will be notified once it is processed\\.",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            
+            # Notify admin for approval (both automatic and manual now require approval)
+            escaped_bank_details_for_display = escape_markdown_v2(bank_details_raw_input)
+            
+            admin_approval_message = (
+                f"🔔 *NEW {payment_mode.value.upper()} WITHDRAWAL REQUEST\\!* 🔔\n\n"
+                f"User: [{escape_markdown_v2(user_first_name)}](tg://user?id={user_id})"
+                f"{f' \\(@{escape_markdown_v2(user_username)}\\)' if user_username else ''}\n"
+                f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
+                f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
+                f"Mode: *{escape_markdown_v2(payment_mode.value.title())}*\n"
+                f"Bank Details:\n`{escaped_bank_details_for_display}`\n\n"
+                f"Request ID: `{withdrawal.id}`\n\n"
+                f"⚠️ *Admin approval required* before processing\\."
+            )
 
-                # Use new admin approval buttons
-                approval_keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("✅ Approve", callback_data=f"admin_approve_withdrawal_{withdrawal.id}")],
-                    [InlineKeyboardButton("❌ Reject", callback_data=f"admin_reject_withdrawal_{withdrawal.id}")]
-                ])
+            # Use new admin approval buttons
+            approval_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Approve", callback_data=f"admin_approve_withdrawal_{withdrawal.id}")],
+                [InlineKeyboardButton("❌ Reject", callback_data=f"admin_reject_withdrawal_{withdrawal.id}")]
+            ])
 
-                await notify_admin(user_id, admin_approval_message, reply_markup=approval_keyboard)
-
-                await update.message.reply_text(
-                    f"✅ Your manual withdrawal request for *₦{int(withdrawal_amount_ngn)}* has been submitted "
-                    "and is awaiting admin approval\. We will notify you once it's processed\."
-                    , parse_mode=ParseMode.MARKDOWN_V2
-                )
+            await notify_admin(user_id, admin_approval_message, reply_markup=approval_keyboard)
             
             # Clear user data
             context.user_data.pop("withdrawal_amount_usd", None)

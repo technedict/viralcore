@@ -204,6 +204,9 @@ class WithdrawalService:
         """
         Process automatic withdrawal using Flutterwave API.
         
+        DEPRECATED: This method should not be called directly. Use approve_withdrawal_by_mode instead.
+        This ensures proper admin approval workflow is followed.
+        
         Args:
             withdrawal: Withdrawal to process
             
@@ -211,8 +214,23 @@ class WithdrawalService:
             True if successful, False otherwise
         """
         
+        logger.warning(
+            f"process_automatic_withdrawal called directly for withdrawal {withdrawal.id}. "
+            "This method is deprecated - use approve_withdrawal_by_mode instead to ensure approval workflow."
+        )
+        
         if withdrawal.payment_mode != PaymentMode.AUTOMATIC:
             raise ValueError("Cannot process manual withdrawal as automatic")
+        
+        # CRITICAL: Check that withdrawal has been approved
+        # This prevents premature API calls before admin approval
+        if withdrawal.admin_approval_state != AdminApprovalState.APPROVED:
+            error_msg = (
+                f"Cannot process withdrawal {withdrawal.id} - admin approval required. "
+                f"Current state: {withdrawal.admin_approval_state}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         try:
             # Update status to processing
@@ -549,6 +567,83 @@ class WithdrawalService:
                 logger.error(f"Failed to reject manual withdrawal {withdrawal_id}: {str(e)}")
                 return False
     
+    def reject_withdrawal(self, withdrawal_id: int, admin_id: int, reason: str = None) -> bool:
+        """
+        Reject a withdrawal (works for both manual and automatic modes).
+        
+        Args:
+            withdrawal_id: Withdrawal ID to reject
+            admin_id: Admin user ID performing the rejection
+            reason: Optional reason for rejection
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        
+        with get_connection(DB_FILE) as conn:
+            try:
+                conn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
+                
+                # Get withdrawal with row lock
+                c = conn.cursor()
+                c.execute('''
+                    SELECT * FROM withdrawals 
+                    WHERE id = ?
+                    ORDER BY id
+                ''', (withdrawal_id,))
+                
+                row = c.fetchone()
+                if not row:
+                    logger.warning(f"Withdrawal {withdrawal_id} not found")
+                    return False
+                
+                # Convert row to dict
+                columns = [desc[0] for desc in c.description]
+                withdrawal_data = dict(zip(columns, row))
+                withdrawal = Withdrawal.from_dict(withdrawal_data)
+                
+                # Check if already rejected (idempotency)
+                if withdrawal.admin_approval_state == AdminApprovalState.REJECTED:
+                    logger.info(f"Withdrawal {withdrawal_id} already rejected")
+                    return True
+                
+                if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
+                    logger.warning(f"Withdrawal {withdrawal_id} is not in pending state: {withdrawal.admin_approval_state}")
+                    return False
+                
+                # Update withdrawal
+                withdrawal.admin_approval_state = AdminApprovalState.REJECTED
+                withdrawal.status = WithdrawalStatus.REJECTED
+                withdrawal.admin_id = admin_id
+                withdrawal.failure_reason = reason or "Rejected by admin"
+                withdrawal.processed_at = datetime.utcnow().isoformat()
+                withdrawal.updated_at = datetime.utcnow().isoformat()
+                
+                # Save changes
+                self._update_withdrawal_in_transaction(withdrawal, conn)
+                
+                # Log audit event
+                self._log_audit_event_in_transaction(
+                    withdrawal_id=withdrawal_id,
+                    admin_id=admin_id,
+                    action="rejected",
+                    old_status="pending",
+                    new_status="rejected",
+                    old_approval_state="pending",
+                    new_approval_state="rejected",
+                    reason=reason,
+                    conn=conn
+                )
+                
+                conn.commit()
+                logger.info(f"Withdrawal {withdrawal_id} rejected by admin {admin_id}")
+                return True
+                
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to reject withdrawal {withdrawal_id}: {str(e)}")
+                return False
+    
     def approve_withdrawal_by_mode(self, withdrawal_id: int, admin_id: int, reason: str = None) -> bool:
         """
         Approve a withdrawal based on current system mode (idempotent).
@@ -688,6 +783,12 @@ class WithdrawalService:
             # Save processing state first
             self._update_withdrawal_in_transaction(withdrawal, conn)
             conn.commit()  # Commit the processing state
+            
+            # Defensive check: verify status is PROCESSING before calling external API
+            if withdrawal.status != WithdrawalStatus.PROCESSING:
+                error_msg = f"Cannot call Flutterwave API - withdrawal status is {withdrawal.status.value}, expected PROCESSING"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             
             # Now call Flutterwave API (outside transaction)
             try:

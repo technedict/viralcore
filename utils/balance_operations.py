@@ -77,10 +77,11 @@ def atomic_balance_update(
     amount: float,
     operation_type: str,
     reason: str,
-    operation_id: Optional[str] = None
+    operation_id: Optional[str] = None,
+    max_retries: int = 3
 ) -> bool:
     """
-    Perform atomic balance update with idempotency.
+    Perform atomic balance update with idempotency and retry logic.
     
     Args:
         user_id: User ID
@@ -89,6 +90,7 @@ def atomic_balance_update(
         operation_type: Type of operation (e.g., "withdraw", "bonus")
         reason: Human-readable reason
         operation_id: Optional operation ID for idempotency
+        max_retries: Maximum number of retries for database locked errors
     
     Returns:
         True if successful, False otherwise
@@ -103,6 +105,32 @@ def atomic_balance_update(
     # Initialize ledger outside of transaction to avoid deadlocks
     init_operations_ledger()
     
+    # Retry logic for database locked errors
+    import time
+    for attempt in range(max_retries):
+        try:
+            return _perform_balance_update(user_id, balance_type, amount, operation_type, reason, operation_id)
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e).lower() and attempt < max_retries - 1:
+                # Exponential backoff
+                wait_time = 0.1 * (2 ** attempt)
+                logger.warning(f"Database locked, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Database error in atomic_balance_update: {e}")
+                return False
+    
+    return False
+
+def _perform_balance_update(
+    user_id: int,
+    balance_type: BalanceType,
+    amount: float,
+    operation_type: str,
+    reason: str,
+    operation_id: str
+) -> bool:
+    """Internal function to perform the actual balance update."""
     with get_connection(DB_FILE) as conn:
         try:
             c = conn.cursor()
@@ -116,71 +144,63 @@ def atomic_balance_update(
                 conn.rollback()
                 return True
             
-            # Get current balance
+            # Get current balance and update atomically
             if balance_type == "affiliate":
-                c.execute(
-                    "SELECT affiliate_balance FROM users WHERE id = ?",
-                    (user_id,)
-                )
-                row = c.fetchone()
-                current_balance = row['affiliate_balance'] if row else 0.0
-                
-                # Check sufficient funds for debit operations
-                if amount < 0 and abs(amount) > current_balance:
-                    logger.warning(f"Insufficient affiliate balance for user {user_id}: requested {abs(amount)}, available {current_balance}")
-                    conn.rollback()
-                    return False
-                
-                # Update balance
-                new_balance = current_balance + amount
-                c.execute(
-                    "UPDATE users SET affiliate_balance = ? WHERE id = ?",
-                    (new_balance, user_id)
-                )
+                # For withdrawals (amount < 0), use atomic UPDATE with balance check
+                if amount < 0:
+                    # Atomic update: only succeed if balance is sufficient
+                    result = c.execute(
+                        "UPDATE users SET affiliate_balance = affiliate_balance + ? WHERE id = ? AND affiliate_balance >= ?",
+                        (amount, user_id, abs(amount))
+                    )
+                    if result.rowcount == 0:
+                        # Either user doesn't exist or insufficient balance
+                        c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (user_id,))
+                        row = c.fetchone()
+                        current_balance = row['affiliate_balance'] if row else 0.0
+                        logger.warning(f"Insufficient affiliate balance for user {user_id}: requested {abs(amount)}, available {current_balance}")
+                        conn.rollback()
+                        return False
+                else:
+                    # For deposits (amount > 0), simple atomic update
+                    c.execute(
+                        "UPDATE users SET affiliate_balance = affiliate_balance + ? WHERE id = ?",
+                        (amount, user_id)
+                    )
                 
             elif balance_type == "reply":
-                # For reply balance, use local implementation
-                # Try to import viralmonitor if available, otherwise use fallback
-                try:
-                    from viralmonitor.utils.db import get_total_amount
-                    current_balance = get_total_amount(user_id)
-                except (ImportError, ModuleNotFoundError):
-                    # Fallback: use reply_balances table directly
-                    c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (user_id,))
-                    row = c.fetchone()
-                    current_balance = row['balance'] if row else 0.0
+                # For reply balance, use atomic UPDATE approach
+                # First ensure row exists
+                c.execute("""
+                    INSERT OR IGNORE INTO reply_balances 
+                    (user_id, balance, total_posts, daily_posts) 
+                    VALUES (?, 0.0, 0, 0)
+                """, (user_id,))
                 
-                if amount < 0 and abs(amount) > current_balance:
-                    logger.warning(f"Insufficient reply balance for user {user_id}: requested {abs(amount)}, available {current_balance}")
-                    conn.rollback()
-                    return False
-                
-                # Update reply balance
+                # Atomic update with balance check for withdrawals
                 if amount < 0:
-                    # Debit operation
-                    new_balance = current_balance + amount  # amount is negative
-                    c.execute("""
-                        INSERT OR REPLACE INTO reply_balances 
-                        (user_id, balance, total_posts, daily_posts) 
-                        VALUES (
-                            ?, 
-                            ?,
-                            COALESCE((SELECT total_posts FROM reply_balances WHERE user_id = ?), 0),
-                            COALESCE((SELECT daily_posts FROM reply_balances WHERE user_id = ?), 0)
-                        )
-                    """, (user_id, new_balance, user_id, user_id))
+                    # Debit operation - only succeed if balance is sufficient
+                    result = c.execute("""
+                        UPDATE reply_balances 
+                        SET balance = balance + ? 
+                        WHERE user_id = ? AND balance >= ?
+                    """, (amount, user_id, abs(amount)))
+                    
+                    if result.rowcount == 0:
+                        # Insufficient balance
+                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (user_id,))
+                        row = c.fetchone()
+                        current_balance = row['balance'] if row else 0.0
+                        logger.warning(f"Insufficient reply balance for user {user_id}: requested {abs(amount)}, available {current_balance}")
+                        conn.rollback()
+                        return False
                 else:
-                    # Credit operation
+                    # Credit operation - simple atomic update
                     c.execute("""
-                        INSERT OR REPLACE INTO reply_balances 
-                        (user_id, balance, total_posts, daily_posts) 
-                        VALUES (
-                            ?, 
-                            COALESCE((SELECT balance FROM reply_balances WHERE user_id = ?), 0) + ?,
-                            COALESCE((SELECT total_posts FROM reply_balances WHERE user_id = ?), 0),
-                            COALESCE((SELECT daily_posts FROM reply_balances WHERE user_id = ?), 0)
-                        )
-                    """, (user_id, user_id, amount, user_id, user_id))
+                        UPDATE reply_balances 
+                        SET balance = balance + ? 
+                        WHERE user_id = ?
+                    """, (amount, user_id))
             
             # Record operation in ledger
             c.execute("""
@@ -201,13 +221,18 @@ def atomic_balance_update(
             logger.info(f"Balance operation completed: {operation_id} - User {user_id}, {balance_type} balance changed by {amount}")
             return True
             
+        except sqlite3.OperationalError as e:
+            # Let database locked errors bubble up for retry
+            conn.rollback()
+            raise
         except sqlite3.Error as e:
-            logger.error(f"Database error in atomic_balance_update: {e}")
+            logger.error(f"Database error in _perform_balance_update: {e}")
             conn.rollback()
             return False
         except Exception as e:
-            logger.error(f"Unexpected error in atomic_balance_update: {e}")
+            logger.error(f"Unexpected error in _perform_balance_update: {e}")
             conn.rollback()
+            return False
             return False
 
 def atomic_withdraw_operation(

@@ -24,9 +24,17 @@ TG_PLAN_TYPE = 'tgt'
 
 
 def get_connection(db_file: str) -> sqlite3.Connection:
-    """Helper to open a SQLite connection with row factory."""
-    conn = sqlite3.connect(db_file)
+    """Helper to open a SQLite connection with row factory and optimized settings."""
+    # Increase timeout to 30 seconds to handle concurrent operations
+    conn = sqlite3.connect(db_file, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    
+    # Enable Write-Ahead Logging for better concurrency
+    conn.execute("PRAGMA journal_mode=WAL")
+    
+    # Set busy timeout for additional safety
+    conn.execute("PRAGMA busy_timeout=30000")
+    
     return conn
 
 # --- Database Initialization ---
