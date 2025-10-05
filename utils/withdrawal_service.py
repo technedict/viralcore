@@ -15,7 +15,12 @@ from utils.db_utils import get_connection, DB_FILE
 from utils.balance_operations import atomic_withdraw_operation
 from utils.api_client import get_flutterwave_client, APIError
 
-from viralmonitor.utils.db import db_path
+# Try to import viralmonitor if available (optional dependency)
+try:
+    from viralmonitor.utils.db import db_path
+except (ImportError, ModuleNotFoundError):
+    # Fallback if viralmonitor not available
+    db_path = None
 
 logger = logging.getLogger(__name__)
 
@@ -367,7 +372,15 @@ class WithdrawalService:
                             return False
                         
                     elif balance_type == "reply":
-                        with get_connection(db_path) as wconn:
+
+                        
+                        # Use viralmonitor db_path if available, otherwise use main DB
+
+                        
+                        reply_db_path = db_path if db_path else DB_FILE
+
+                        
+                        with get_connection(reply_db_path) as wconn:
                             try:
                                 wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
                                 
@@ -691,7 +704,15 @@ class WithdrawalService:
                         return False
                     
                 elif balance_type == "reply":
-                    with get_connection(db_path) as wconn:
+
+                    
+                    # Use viralmonitor db_path if available, otherwise use main DB
+
+                    
+                    reply_db_path = db_path if db_path else DB_FILE
+
+                    
+                    with get_connection(reply_db_path) as wconn:
                         try:
                             wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
                             
@@ -793,7 +814,15 @@ class WithdrawalService:
                         return False
                     
                 elif balance_type == "reply":
-                    with get_connection(db_path) as wconn:
+
+                    
+                    # Use viralmonitor db_path if available, otherwise use main DB
+
+                    
+                    reply_db_path = db_path if db_path else DB_FILE
+
+                    
+                    with get_connection(reply_db_path) as wconn:
                         try:
                             wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
                             
