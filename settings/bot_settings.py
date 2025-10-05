@@ -29,3 +29,21 @@ BATCH_INTERVAL_SECONDS = INTERVAL_MINUTES * 60
 # File path to persist the batch pointer index
 # This file will store a JSON object: {"pointer": <int>}
 POINTER_FILE = "settings/group_pointer.json"
+
+# ========================================
+# Likes Group Configuration
+# ========================================
+# Independent admin group that receives every post with likes_needed metric
+# This group is exempt from rotation and receives all posts unconditionally
+
+# Enable/disable Likes Group sending (default: disabled for backward compatibility)
+import os
+ADMIN_LIKES_GROUP_ENABLED = os.getenv("ADMIN_LIKES_GROUP_ENABLED", "false").lower() == "true"
+
+# Likes Group chat ID (must be configured when enabled)
+ADMIN_LIKES_GROUP_CHAT_ID = os.getenv("ADMIN_LIKES_GROUP_CHAT_ID", None)
+if ADMIN_LIKES_GROUP_CHAT_ID:
+    try:
+        ADMIN_LIKES_GROUP_CHAT_ID = int(ADMIN_LIKES_GROUP_CHAT_ID)
+    except ValueError:
+        ADMIN_LIKES_GROUP_CHAT_ID = None

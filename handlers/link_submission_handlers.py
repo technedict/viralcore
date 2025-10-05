@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes, CallbackContext
 from utils.boost_utils import BoostManager
 from utils.notification import notify_admin
 from utils.messaging import escape_markdown_v2
+from utils.likes_group import send_to_likes_group, METRICS as LIKES_GROUP_METRICS
 
 from settings.bot_settings import (
     COMMENT_GROUP_IDS,
@@ -432,6 +433,26 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
                 'parse_mode': 'MarkdownV2'
             }
         )
+    
+    # Track Group 1 send
+    LIKES_GROUP_METRICS["posts_sent_group1"] += 1
+
+    # Send to Likes Group (independent, fail-safe operation)
+    # This happens immediately and is exempt from rotation
+    try:
+        await send_to_likes_group(
+            context=context,
+            post_id=pending["tweet_id"],
+            content=pending["twitter_link"],
+            likes_needed=t_l,  # likes_needed is the target_likes
+            post_type="twitter",
+        )
+    except Exception as e:
+        # Fail-safe: log but don't interrupt Group 1 flow
+        logger.error(
+            f"[LikesGroup] Exception in send_to_likes_group for tweet {pending['tweet_id']}: {e}",
+            exc_info=True
+        )
 
     # Confirm back to user
     await query.edit_message_text(
@@ -545,6 +566,27 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
                 'text': message_text,
                 'parse_mode': 'MarkdownV2'
             }
+        )
+    
+    # Track Group 1 send
+    LIKES_GROUP_METRICS["posts_sent_group1"] += 1
+
+    # Send to Likes Group (independent, fail-safe operation)
+    # For Telegram posts, likes_needed is based on quantity (target reactions)
+    # Using quantity as likes_needed since TG posts track reactions
+    try:
+        await send_to_likes_group(
+            context=context,
+            post_id=pending["telegram_link"],  # Using link as ID for TG posts
+            content=pending["telegram_link"],
+            likes_needed=quantity or 0,  # likes_needed = target reactions
+            post_type="telegram",
+        )
+    except Exception as e:
+        # Fail-safe: log but don't interrupt Group 1 flow
+        logger.error(
+            f"[LikesGroup] Exception in send_to_likes_group for TG post {pending['telegram_link']}: {e}",
+            exc_info=True
         )
 
     # Confirm back in the chat
