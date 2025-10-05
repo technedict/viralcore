@@ -4,6 +4,15 @@ A comprehensive Telegram bot for managing viral content engagement and affiliate
 
 ## New Features (v2.1.0)
 
+### 🎯 Likes Group - Independent Admin Tracking (v2.2.0)
+- **Dual Group System**: Every post now sent to both Group 1 (comments/retweets) and Likes Group (likes_needed metric)
+- **Rotation Exemption**: Likes Group receives every post unconditionally, exempt from rotation logic
+- **Fail-Safe Design**: Likes Group failures don't affect Group 1 sends
+- **Deduplication**: Built-in safeguards prevent duplicate messages
+- **Rich Metrics**: Track posts_sent_group2, posts_failed_group2, posts_deduped_group2
+- **Structured Logging**: Full correlation IDs and timestamps for tracking
+- **Feature Toggle**: Enable/disable via `ADMIN_LIKES_GROUP_ENABLED` environment variable
+
 ### 🔒 Enhanced Provider Security & Service ID Leak Prevention
 - **Immutable Job Snapshots**: Provider configurations captured at job creation prevent service_id leaks during provider switches
 - **Concurrency-Safe Operations**: Database locking (SELECT...FOR UPDATE) prevents race conditions 
@@ -138,6 +147,53 @@ ADMIN_GROUP_ENDPOINT=-4855378356      # Alternative/legacy name for above
 ADMIN_CONTACTS=admin@example.com      # Email addresses, comma-separated
 SLACK_WEBHOOK_URL=https://...         # Slack webhook (optional)
 ENABLE_TELEGRAM_NOTIFICATIONS=true    # Toggle Telegram notifications
+```
+
+### Likes Group (Independent Admin Tracking)
+
+**Overview:**
+The Likes Group is a second independent admin group that receives every post with a `likes_needed` metric. It operates separately from Group 1 and is exempt from rotation logic.
+
+**Configuration:**
+```bash
+# Enable/disable Likes Group (default: false for backward compatibility)
+ADMIN_LIKES_GROUP_ENABLED=true
+
+# Telegram chat ID for Likes Group (required when enabled)
+ADMIN_LIKES_GROUP_CHAT_ID=-1001234567890
+```
+
+**Key Features:**
+- Every post sent to both Group 1 (unchanged) and Likes Group
+- Group 1 receives comments/retweets metrics as before
+- Likes Group receives `likes_needed` metric only
+- Likes Group exempt from rotation (receives all posts)
+- Fail-safe design: Likes Group failures don't affect Group 1
+- Deduplication prevents duplicate sends
+- Rich logging with correlation IDs and timestamps
+
+**Message Format:**
+```
+🎯 New Post - Likes Needed 🎯
+
+🆔 ID: `123456789`
+🔗 https://x.com/user/status/123456789
+
+❤️ Likes Needed: `50`
+
+🔍 Correlation ID: `abc-123-def`
+⏰ Timestamp: `2025-10-05 15:30:00 UTC`
+```
+
+**Documentation:**
+- See `LIKES_GROUP_RUNBOOK.md` for manual verification steps
+- See `LIKES_GROUP_MESSAGE_TEMPLATES.md` for payload specifications
+
+**Rollback:**
+To disable Likes Group immediately:
+```bash
+ADMIN_LIKES_GROUP_ENABLED=false
+# Restart bot
 ```
 
 ## Running Tests
