@@ -683,8 +683,9 @@ class WithdrawalService:
             # Check if operation already completed (idempotency)
             c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (withdrawal.operation_id,))
             op_row = c.fetchone()
-            if op_row and op_row['status'] == 'completed':
+            if withdrawal.admin_approval_state == AdminApprovalState.APPROVED:
                 logger.info(f"Balance operation {withdrawal.operation_id} already completed")
+                return True
             else:
                 # Deduct balance using atomic UPDATE with balance check (same pattern as in approve_manual_withdrawal)
                 if balance_type == "affiliate":
