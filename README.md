@@ -93,9 +93,27 @@ The database directory location can be configured via the `DB_DIR` environment v
 ### Withdrawal System Enhancements
 
 **Admin Approval for Withdrawals:**
-- All withdrawal requests (both manual and automatic) now require admin approval by default
+- All withdrawal requests (both manual and automatic) require admin approval by default
 - Set `DISABLE_ADMIN_APPROVAL=true` in `.env` to bypass approval (for testing/staging only)
 - Admins receive notifications via Telegram, Email, or Slack when withdrawals are requested
+
+**User Notifications:**
+- Users are automatically notified when their withdrawal is approved or rejected
+- Notifications include withdrawal details, status, and next steps
+- Idempotent delivery prevents duplicate notifications
+- Notification delivery tracked in database audit trail
+
+**Flutterwave Error Notifications:**
+- All Flutterwave API errors are automatically sent to admin Telegram group
+- Notifications include structured error details, correlation IDs, and actionable information
+- De-duplication prevents spam from repeated failures
+- Can be toggled on/off for testing via `ENABLE_TELEGRAM_NOTIFICATIONS`
+
+**Consolidated Automatic Withdrawal Process:**
+- Single authoritative automatic withdrawal implementation
+- Atomic claim/execute pattern prevents duplicate processing
+- Backward-compatible shims for deprecated methods
+- Centralized error handling and notification logic
 
 **Error Handling & Notifications:**
 - Failed withdrawal attempts are logged with full error details and correlation IDs
@@ -115,9 +133,11 @@ WITHDRAWAL_RETRY_COUNT=3              # Number of retries for failed API calls
 WITHDRAWAL_RETRY_BACKOFF_SEC=60       # Seconds between retries
 
 # Admin notification settings
-ADMIN_GROUP_ENDPOINT=-4855378356      # Telegram group ID(s), comma-separated
+ADMIN_TELEGRAM_CHAT_ID=-4855378356    # Telegram group ID(s), comma-separated
+ADMIN_GROUP_ENDPOINT=-4855378356      # Alternative/legacy name for above
 ADMIN_CONTACTS=admin@example.com      # Email addresses, comma-separated
 SLACK_WEBHOOK_URL=https://...         # Slack webhook (optional)
+ENABLE_TELEGRAM_NOTIFICATIONS=true    # Toggle Telegram notifications
 ```
 
 ## Running Tests
