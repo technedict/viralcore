@@ -15,6 +15,8 @@ from utils.db_utils import get_connection, DB_FILE
 from utils.balance_operations import atomic_withdraw_operation
 from utils.api_client import get_flutterwave_client, APIError
 
+from viralmonitor.utils.db import db_path
+
 logger = logging.getLogger(__name__)
 
 class PaymentMode(Enum):
@@ -419,28 +421,32 @@ class WithdrawalService:
                             return False
                         
                     elif balance_type == "reply":
-                        # First ensure row exists
-                        c.execute("""
-                            INSERT OR IGNORE INTO reply_balances 
-                            (user_id, balance, total_posts, daily_posts) 
-                            VALUES (?, 0.0, 0, 0)
-                        """, (withdrawal.user_id,))
+                        with get_connection(db_path) as wconn:
+                            try:
+                                wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
+                                
+                                # Get withdrawal with row lock (SQLite compatible)
+                                d = wconn.cursor()
                         
-                        # Atomic update: only succeed if balance is sufficient
-                        result = c.execute("""
-                            UPDATE reply_balances 
-                            SET balance = balance - ? 
-                            WHERE user_id = ? AND balance >= ?
-                        """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
-                        
-                        if result.rowcount == 0:
-                            # Insufficient balance
-                            c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
-                            bal_row = c.fetchone()
-                            current_balance = bal_row['balance'] if bal_row else 0.0
-                            logger.error(f"Insufficient reply balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
-                            conn.rollback()
-                            return False
+                                # Atomic update: only succeed if balance is sufficient
+                                result = d.execute("""
+                                    UPDATE balance_changes 
+                                    SET change_amount = change_amount - ? 
+                                    WHERE usid = ? AND change_amount >= ?
+                                """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
+                                
+                                if result.rowcount == 0:
+                                    # Insufficient balance
+                                    d.execute("SELECT change_amount FROM balance_changes WHERE user_id = ?", (withdrawal.user_id,))
+                                    bal_row = d.fetchone()
+                                    current_balance = bal_row['change_amount'] if bal_row else 0.0
+                                    logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                    wconn.rollback()
+                                    return False
+                            except Exception as e:
+                                wconn.rollback()
+                                logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                                return False
                     
                     # Record operation in ledger
                     from datetime import datetime
@@ -739,28 +745,32 @@ class WithdrawalService:
                         return False
                     
                 elif balance_type == "reply":
-                    # First ensure row exists
-                    c.execute("""
-                        INSERT OR IGNORE INTO reply_balances 
-                        (user_id, balance, total_posts, daily_posts) 
-                        VALUES (?, 0.0, 0, 0)
-                    """, (withdrawal.user_id,))
+                    with get_connection(db_path) as wconn:
+                        try:
+                            wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
+                            
+                            # Get withdrawal with row lock (SQLite compatible)
+                            d = wconn.cursor()
                     
-                    # Atomic update: only succeed if balance is sufficient
-                    result = c.execute("""
-                        UPDATE reply_balances 
-                        SET balance = balance - ? 
-                        WHERE user_id = ? AND balance >= ?
-                    """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
-                    
-                    if result.rowcount == 0:
-                        # Insufficient balance
-                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
-                        bal_row = c.fetchone()
-                        current_balance = bal_row['balance'] if bal_row else 0.0
-                        logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
-                        conn.rollback()
-                        return False
+                            # Atomic update: only succeed if balance is sufficient
+                            result = d.execute("""
+                                UPDATE balance_changes 
+                                SET change_amount = change_amount - ? 
+                                WHERE usid = ? AND change_amount >= ?
+                            """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
+                            
+                            if result.rowcount == 0:
+                                # Insufficient balance
+                                d.execute("SELECT change_amount FROM balance_changes WHERE user_id = ?", (withdrawal.user_id,))
+                                bal_row = d.fetchone()
+                                current_balance = bal_row['change_amount'] if bal_row else 0.0
+                                logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                wconn.rollback()
+                                return False
+                        except Exception as e:
+                            wconn.rollback()
+                            logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                            return False
                 
                 # Record operation in ledger
                 c.execute("""
@@ -837,28 +847,32 @@ class WithdrawalService:
                         return False
                     
                 elif balance_type == "reply":
-                    # First ensure row exists
-                    c.execute("""
-                        INSERT OR IGNORE INTO reply_balances 
-                        (user_id, balance, total_posts, daily_posts) 
-                        VALUES (?, 0.0, 0, 0)
-                    """, (withdrawal.user_id,))
+                    with get_connection(db_path) as wconn:
+                        try:
+                            wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
+                            
+                            # Get withdrawal with row lock (SQLite compatible)
+                            d = wconn.cursor()
                     
-                    # Atomic update: only succeed if balance is sufficient
-                    result = c.execute("""
-                        UPDATE reply_balances 
-                        SET balance = balance - ? 
-                        WHERE user_id = ? AND balance >= ?
-                    """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
-                    
-                    if result.rowcount == 0:
-                        # Insufficient balance
-                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
-                        bal_row = c.fetchone()
-                        current_balance = bal_row['balance'] if bal_row else 0.0
-                        logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
-                        conn.rollback()
-                        return False
+                            # Atomic update: only succeed if balance is sufficient
+                            result = d.execute("""
+                                UPDATE balance_changes 
+                                SET change_amount = change_amount - ? 
+                                WHERE usid = ? AND change_amount >= ?
+                            """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
+                            
+                            if result.rowcount == 0:
+                                # Insufficient balance
+                                d.execute("SELECT change_amount FROM balance_changes WHERE user_id = ?", (withdrawal.user_id,))
+                                bal_row = d.fetchone()
+                                current_balance = bal_row['change_amount'] if bal_row else 0.0
+                                logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                wconn.rollback()
+                                return False
+                        except Exception as e:
+                            wconn.rollback()
+                            logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                            return False
                 
                 # Record operation in ledger
                 c.execute("""

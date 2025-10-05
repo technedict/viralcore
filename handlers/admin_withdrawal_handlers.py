@@ -270,8 +270,8 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
             f"✅ *Withdrawal Approved Successfully\\!*\n\n"
             f"📋 **Details:**\n"
             f"• Request ID: `{withdrawal.id}`\n"
-            f"• User:  [{escape_markdown_v2(username)}](tg://user?id={withdrawal.user_id})\n"
-            f"• Amount: *₦{int(withdrawal.amount_ngn)}* \\(${withdrawal.amount_usd:.2f}\\)\n"
+            f"• User:  [{escape_markdown_v2(username)}]\n"
+            f"• Amount: *₦{int(withdrawal.amount_ngn)}*\n"
             f"• Mode: *{escape_markdown_v2(mode_text)}*\n"
             f"• Balance deducted successfully\n"
         )
