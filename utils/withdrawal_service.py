@@ -401,43 +401,46 @@ class WithdrawalService:
                 if op_row and op_row['status'] == 'completed':
                     logger.info(f"Balance operation {withdrawal.operation_id} already completed")
                 else:
-                    # Get and check current balance
+                    # Deduct balance using atomic UPDATE with balance check
                     if balance_type == "affiliate":
-                        c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (withdrawal.user_id,))
-                        bal_row = c.fetchone()
-                        current_balance = bal_row['affiliate_balance'] if bal_row else 0.0
+                        # Atomic update: only succeed if balance is sufficient
+                        result = c.execute(
+                            "UPDATE users SET affiliate_balance = affiliate_balance - ? WHERE id = ? AND affiliate_balance >= ?",
+                            (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd)
+                        )
                         
-                        if withdrawal.amount_usd > current_balance:
+                        if result.rowcount == 0:
+                            # Either user doesn't exist or insufficient balance
+                            c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (withdrawal.user_id,))
+                            bal_row = c.fetchone()
+                            current_balance = bal_row['affiliate_balance'] if bal_row else 0.0
                             logger.error(f"Insufficient affiliate balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
                             conn.rollback()
                             return False
                         
-                        # Deduct balance
-                        new_balance = current_balance - withdrawal.amount_usd
-                        c.execute("UPDATE users SET affiliate_balance = ? WHERE id = ?", (new_balance, withdrawal.user_id))
-                        
                     elif balance_type == "reply":
-                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
-                        bal_row = c.fetchone()
-                        current_balance = bal_row['balance'] if bal_row else 0.0
+                        # First ensure row exists
+                        c.execute("""
+                            INSERT OR IGNORE INTO reply_balances 
+                            (user_id, balance, total_posts, daily_posts) 
+                            VALUES (?, 0.0, 0, 0)
+                        """, (withdrawal.user_id,))
                         
-                        if withdrawal.amount_usd > current_balance:
+                        # Atomic update: only succeed if balance is sufficient
+                        result = c.execute("""
+                            UPDATE reply_balances 
+                            SET balance = balance - ? 
+                            WHERE user_id = ? AND balance >= ?
+                        """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
+                        
+                        if result.rowcount == 0:
+                            # Insufficient balance
+                            c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
+                            bal_row = c.fetchone()
+                            current_balance = bal_row['balance'] if bal_row else 0.0
                             logger.error(f"Insufficient reply balance for withdrawal {withdrawal_id}: {current_balance} < {withdrawal.amount_usd}")
                             conn.rollback()
                             return False
-                        
-                        # Deduct balance
-                        new_balance = current_balance - withdrawal.amount_usd
-                        c.execute("""
-                            INSERT OR REPLACE INTO reply_balances 
-                            (user_id, balance, total_posts, daily_posts) 
-                            VALUES (
-                                ?, 
-                                ?,
-                                COALESCE((SELECT total_posts FROM reply_balances WHERE user_id = ?), 0),
-                                COALESCE((SELECT daily_posts FROM reply_balances WHERE user_id = ?), 0)
-                            )
-                        """, (withdrawal.user_id, new_balance, withdrawal.user_id, withdrawal.user_id))
                     
                     # Record operation in ledger
                     from datetime import datetime
@@ -709,19 +712,70 @@ class WithdrawalService:
     def _approve_withdrawal_manual_mode(self, withdrawal: Withdrawal, admin_id: int, reason: str, conn) -> bool:
         """Approve withdrawal in manual mode - deduct balance only, no external API call."""
         try:
-            # Deduct balance atomically
+            c = conn.cursor()
             balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
-            success = atomic_withdraw_operation(
-                user_id=withdrawal.user_id,
-                balance_type=balance_type,
-                amount=withdrawal.amount_usd,
-                reason=f"Manual withdrawal approved by admin {admin_id}",
-                operation_id=withdrawal.operation_id
-            )
             
-            if not success:
-                logger.error(f"Balance deduction failed for withdrawal {withdrawal.id}")
-                return False
+            # Check if operation already completed (idempotency)
+            c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (withdrawal.operation_id,))
+            op_row = c.fetchone()
+            if op_row and op_row['status'] == 'completed':
+                logger.info(f"Balance operation {withdrawal.operation_id} already completed")
+            else:
+                # Deduct balance using atomic UPDATE with balance check (same pattern as in approve_manual_withdrawal)
+                if balance_type == "affiliate":
+                    # Atomic update: only succeed if balance is sufficient
+                    result = c.execute(
+                        "UPDATE users SET affiliate_balance = affiliate_balance - ? WHERE id = ? AND affiliate_balance >= ?",
+                        (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd)
+                    )
+                    
+                    if result.rowcount == 0:
+                        # Either user doesn't exist or insufficient balance
+                        c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['affiliate_balance'] if bal_row else 0.0
+                        logger.error(f"Insufficient affiliate balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                        conn.rollback()
+                        return False
+                    
+                elif balance_type == "reply":
+                    # First ensure row exists
+                    c.execute("""
+                        INSERT OR IGNORE INTO reply_balances 
+                        (user_id, balance, total_posts, daily_posts) 
+                        VALUES (?, 0.0, 0, 0)
+                    """, (withdrawal.user_id,))
+                    
+                    # Atomic update: only succeed if balance is sufficient
+                    result = c.execute("""
+                        UPDATE reply_balances 
+                        SET balance = balance - ? 
+                        WHERE user_id = ? AND balance >= ?
+                    """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
+                    
+                    if result.rowcount == 0:
+                        # Insufficient balance
+                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['balance'] if bal_row else 0.0
+                        logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                        conn.rollback()
+                        return False
+                
+                # Record operation in ledger
+                c.execute("""
+                    INSERT INTO balance_operations 
+                    (operation_id, user_id, balance_type, amount, operation_type, reason, timestamp, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+                """, (
+                    withdrawal.operation_id,
+                    withdrawal.user_id,
+                    balance_type,
+                    -withdrawal.amount_usd,  # Negative for withdrawal
+                    "withdraw",
+                    f"Manual withdrawal approved by admin {admin_id}",
+                    datetime.utcnow().isoformat()
+                ))
             
             # Update withdrawal
             withdrawal.status = WithdrawalStatus.COMPLETED
@@ -756,19 +810,70 @@ class WithdrawalService:
     def _approve_withdrawal_automatic_mode(self, withdrawal: Withdrawal, admin_id: int, reason: str, conn) -> bool:
         """Approve withdrawal in automatic mode - deduct balance and call Flutterwave API."""
         try:
-            # First deduct balance atomically
+            c = conn.cursor()
             balance_type = "affiliate" if withdrawal.is_affiliate_withdrawal else "reply"
-            success = atomic_withdraw_operation(
-                user_id=withdrawal.user_id,
-                balance_type=balance_type,
-                amount=withdrawal.amount_usd,
-                reason=f"Automatic withdrawal approved by admin {admin_id}",
-                operation_id=withdrawal.operation_id
-            )
             
-            if not success:
-                logger.error(f"Balance deduction failed for withdrawal {withdrawal.id}")
-                return False
+            # Check if operation already completed (idempotency)
+            c.execute("SELECT status FROM balance_operations WHERE operation_id = ?", (withdrawal.operation_id,))
+            op_row = c.fetchone()
+            if op_row and op_row['status'] == 'completed':
+                logger.info(f"Balance operation {withdrawal.operation_id} already completed")
+            else:
+                # Deduct balance using atomic UPDATE with balance check
+                if balance_type == "affiliate":
+                    # Atomic update: only succeed if balance is sufficient
+                    result = c.execute(
+                        "UPDATE users SET affiliate_balance = affiliate_balance - ? WHERE id = ? AND affiliate_balance >= ?",
+                        (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd)
+                    )
+                    
+                    if result.rowcount == 0:
+                        # Either user doesn't exist or insufficient balance
+                        c.execute("SELECT affiliate_balance FROM users WHERE id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['affiliate_balance'] if bal_row else 0.0
+                        logger.error(f"Insufficient affiliate balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                        conn.rollback()
+                        return False
+                    
+                elif balance_type == "reply":
+                    # First ensure row exists
+                    c.execute("""
+                        INSERT OR IGNORE INTO reply_balances 
+                        (user_id, balance, total_posts, daily_posts) 
+                        VALUES (?, 0.0, 0, 0)
+                    """, (withdrawal.user_id,))
+                    
+                    # Atomic update: only succeed if balance is sufficient
+                    result = c.execute("""
+                        UPDATE reply_balances 
+                        SET balance = balance - ? 
+                        WHERE user_id = ? AND balance >= ?
+                    """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
+                    
+                    if result.rowcount == 0:
+                        # Insufficient balance
+                        c.execute("SELECT balance FROM reply_balances WHERE user_id = ?", (withdrawal.user_id,))
+                        bal_row = c.fetchone()
+                        current_balance = bal_row['balance'] if bal_row else 0.0
+                        logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                        conn.rollback()
+                        return False
+                
+                # Record operation in ledger
+                c.execute("""
+                    INSERT INTO balance_operations 
+                    (operation_id, user_id, balance_type, amount, operation_type, reason, timestamp, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')
+                """, (
+                    withdrawal.operation_id,
+                    withdrawal.user_id,
+                    balance_type,
+                    -withdrawal.amount_usd,  # Negative for withdrawal
+                    "withdraw",
+                    f"Automatic withdrawal approved by admin {admin_id}",
+                    datetime.utcnow().isoformat()
+                ))
             
             # Update status to processing
             withdrawal.status = WithdrawalStatus.PROCESSING
@@ -782,7 +887,7 @@ class WithdrawalService:
             
             # Save processing state first
             self._update_withdrawal_in_transaction(withdrawal, conn)
-            conn.commit()  # Commit the processing state
+            conn.commit()  # Commit the processing state and balance deduction atomically
             
             # Defensive check: verify status is PROCESSING before calling external API
             if withdrawal.status != WithdrawalStatus.PROCESSING:
