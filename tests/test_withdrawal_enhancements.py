@@ -152,22 +152,86 @@ class TestConsolidatedAutomaticWithdrawal(unittest.TestCase):
         import utils.db_utils
         import utils.withdrawal_service
         import utils.balance_operations
+        import utils.withdrawal_settings
         
         utils.db_utils.DB_FILE = cls.test_db_path
         utils.withdrawal_service.DB_FILE = cls.test_db_path
         utils.balance_operations.DB_FILE = cls.test_db_path
+        utils.withdrawal_settings.DB_FILE = cls.test_db_path
         
         # Initialize database
         init_main_db()
         init_operations_ledger()
         
-        # Create test users
+        # Create withdrawals table
         with get_connection(cls.test_db_path) as conn:
             c = conn.cursor()
+            
+            # Create withdrawals table (from withdrawal_service schema)
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    amount_usd REAL NOT NULL,
+                    amount_ngn REAL NOT NULL,
+                    payment_mode TEXT NOT NULL DEFAULT 'automatic',
+                    admin_approval_state TEXT,
+                    admin_id INTEGER,
+                    account_name TEXT NOT NULL,
+                    account_number TEXT NOT NULL,
+                    bank_name TEXT NOT NULL,
+                    bank_details_raw TEXT,
+                    is_affiliate_withdrawal INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'pending',
+                    approved_at TEXT,
+                    processed_at TEXT,
+                    failure_reason TEXT,
+                    flutterwave_reference TEXT,
+                    flutterwave_trace_id TEXT,
+                    operation_id TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create withdrawal audit log table
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawal_audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    withdrawal_id INTEGER NOT NULL,
+                    admin_id INTEGER,
+                    action TEXT NOT NULL,
+                    old_status TEXT,
+                    new_status TEXT,
+                    old_approval_state TEXT,
+                    new_approval_state TEXT,
+                    reason TEXT,
+                    metadata TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create withdrawal errors table
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS withdrawal_errors (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    withdrawal_id INTEGER NOT NULL,
+                    error_code TEXT NOT NULL,
+                    error_message TEXT NOT NULL,
+                    error_payload TEXT,
+                    request_id TEXT,
+                    correlation_id TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create test users
             c.execute('INSERT INTO users (id, username, affiliate_balance) VALUES (?, ?, ?)', 
                      (100, 'test_auto_user', 500.0))
             c.execute('INSERT INTO users (id, username, is_admin) VALUES (?, ?, ?)',
                      (1, 'admin', 1))
+            
             conn.commit()
     
     @classmethod
