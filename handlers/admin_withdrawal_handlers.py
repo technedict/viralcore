@@ -295,8 +295,22 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
         )
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         
-        # Notify user of approval (you can implement user notification here)
-        # await notify_user_withdrawal_approved(withdrawal.user_id, withdrawal)
+        # Notify user of approval
+        import asyncio
+        from utils.notification_service import notify_user_withdrawal_approved
+        try:
+            asyncio.create_task(notify_user_withdrawal_approved(
+                user_id=withdrawal.user_id,
+                withdrawal_id=withdrawal.id,
+                amount_usd=withdrawal.amount_usd,
+                amount_ngn=withdrawal.amount_ngn,
+                bank_name=withdrawal.bank_name,
+                account_number=withdrawal.account_number,
+                payment_mode=withdrawal.payment_mode.value,
+                correlation_id=f"approval_{withdrawal.id}"
+            ))
+        except Exception as notify_error:
+            logger.error(f"Failed to notify user of approval: {notify_error}")
         
     else:
         msg = await query.message.reply_text(
@@ -384,8 +398,22 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
         )
         context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         
-        # Notify user of rejection (you can implement user notification here)
-        # await notify_user_withdrawal_rejected(withdrawal.user_id, withdrawal)
+        # Notify user of rejection
+        import asyncio
+        from utils.notification_service import notify_user_withdrawal_rejected
+        try:
+            asyncio.create_task(notify_user_withdrawal_rejected(
+                user_id=withdrawal.user_id,
+                withdrawal_id=withdrawal.id,
+                amount_usd=withdrawal.amount_usd,
+                amount_ngn=withdrawal.amount_ngn,
+                bank_name=withdrawal.bank_name,
+                account_number=withdrawal.account_number,
+                reason=f"Rejected by admin {user.username or user.first_name}",
+                correlation_id=f"rejection_{withdrawal.id}"
+            ))
+        except Exception as notify_error:
+            logger.error(f"Failed to notify user of rejection: {notify_error}")
         
     else:
         msg = await query.message.reply_text(
