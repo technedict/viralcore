@@ -756,6 +756,7 @@ class WithdrawalService:
             
             # Update withdrawal
             withdrawal.status = WithdrawalStatus.COMPLETED
+            withdrawal.admin_approval_state = AdminApprovalState.APPROVED
             withdrawal.admin_id = admin_id
             withdrawal.approved_at = datetime.utcnow().isoformat()
             withdrawal.processed_at = datetime.utcnow().isoformat()
@@ -771,6 +772,8 @@ class WithdrawalService:
                 action="approved-manual",
                 old_status="pending",
                 new_status="completed",
+                old_approval_state="pending",
+                new_approval_state="approved",
                 reason=reason,
                 metadata={"mode": "manual", "external_api_called": False},
                 conn=conn
@@ -866,6 +869,7 @@ class WithdrawalService:
             
             # Update status to processing
             withdrawal.status = WithdrawalStatus.PROCESSING
+            withdrawal.admin_approval_state = AdminApprovalState.APPROVED
             withdrawal.admin_id = admin_id
             withdrawal.approved_at = datetime.utcnow().isoformat()
             withdrawal.updated_at = datetime.utcnow().isoformat()
@@ -911,6 +915,8 @@ class WithdrawalService:
                             action="approved-automatic",
                             old_status="processing",
                             new_status="completed",
+                            old_approval_state="approved",
+                            new_approval_state="approved",
                             reason=reason,
                             metadata={
                                 "mode": "automatic",
