@@ -89,7 +89,7 @@ PROVIDERS: Dict[str, ProviderConfig] = {
     ),
     "plugsmms": ProviderConfig(
         name="plugsmms",
-        api_url="https://panel.plugsmmservice.com/api/v2",
+        api_url="https://plugsmmservice.com/api/v2",
         api_key=os.getenv("PLUGSMMS_API_KEY", "MISSING_KEY"),
         view_service_id=7750, 
         like_service_id=11023
