@@ -8,6 +8,7 @@ import asyncio
 import aiohttp
 import json
 import time
+import os
 from typing import Dict, Optional, Any, Tuple
 from enum import Enum
 from dataclasses import dataclass
@@ -326,6 +327,172 @@ class EnhancedBoostService:
     ) -> ProviderResponse:
         """
         Call provider API with safe error handling.
+        Never leak provider internals to clients.
+        
+        Uses new Plugsmm adapter for plugsmms provider, legacy method for others.
+        """
+        
+        # Use new adapter for plugsmms if enabled
+        use_plugsmm_adapter = (
+            provider.name == "plugsmms" and
+            os.getenv("PLUGSMM_USE_NEW_API", "true").lower() == "true"
+        )
+        
+        if use_plugsmm_adapter:
+            return await self._call_plugsmm_adapter(
+                provider, service_id, link, quantity, correlation_id
+            )
+        else:
+            return await self._call_legacy_provider_api(
+                provider, service_id, link, quantity, correlation_id
+            )
+    
+    async def _call_plugsmm_adapter(
+        self,
+        provider,
+        service_id: int,
+        link: str,
+        quantity: int,
+        correlation_id: str
+    ) -> ProviderResponse:
+        """
+        Call Plugsmm API using the new adapter.
+        """
+        try:
+            # Import adapter (lazy to avoid circular imports)
+            from utils.plugsmm_adapter import create_plugsmm_adapter
+            
+            adapter = create_plugsmm_adapter(
+                api_url=provider.api_url,
+                api_key=provider.api_key
+            )
+            
+            # Make request
+            response = await adapter.add_order(
+                service_id=service_id,
+                link=link,
+                quantity=quantity,
+                correlation_id=correlation_id
+            )
+            
+            # Convert to ProviderResponse
+            if response.success:
+                return ProviderResponse(
+                    success=True,
+                    data=response.data
+                )
+            else:
+                # Classify error
+                return self._classify_plugsmm_error(response.error, response.raw_response)
+                
+        except Exception as e:
+            logger.error(
+                f"Plugsmm adapter error: {e}",
+                extra={'correlation_id': correlation_id},
+                exc_info=True
+            )
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.TRANSIENT,
+                error_message="Adapter error",
+                should_retry=True
+            )
+    
+    def _classify_plugsmm_error(
+        self,
+        error_msg: Optional[str],
+        raw_response: Optional[Dict[str, Any]]
+    ) -> ProviderResponse:
+        """
+        Classify Plugsmm-specific errors.
+        """
+        if not error_msg:
+            error_msg = "Unknown error"
+        
+        error_lower = error_msg.lower()
+        
+        # Insufficient funds
+        if "not enough funds" in error_lower or "insufficient balance" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.INSUFFICIENT_FUNDS,
+                error_message="Insufficient balance",
+                should_retry=False
+            )
+        
+        # Invalid service
+        if "incorrect service" in error_lower or "invalid service" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.PERMANENT,
+                error_message="Invalid service ID",
+                should_retry=False
+            )
+        
+        # Invalid API key
+        if "incorrect api key" in error_lower or "invalid key" in error_lower or "unauthorized" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.PERMANENT,
+                error_message="Invalid API key",
+                should_retry=False
+            )
+        
+        # Rate limiting
+        if "rate limit" in error_lower or "too many requests" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.RATE_LIMITED,
+                error_message="Rate limited",
+                should_retry=True,
+                retry_after=60
+            )
+        
+        # Duplicate/active order
+        if "active order" in error_lower or "duplicate" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.TRANSIENT,
+                error_message="Active order exists",
+                should_retry=True
+            )
+        
+        # Invalid link
+        if "incorrect link" in error_lower or "invalid link" in error_lower or "invalid url" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.PERMANENT,
+                error_message="Invalid link",
+                should_retry=False
+            )
+        
+        # Network/timeout errors
+        if "timeout" in error_lower or "network error" in error_lower:
+            return ProviderResponse(
+                success=False,
+                error_type=ProviderErrorType.TRANSIENT,
+                error_message="Network error",
+                should_retry=True
+            )
+        
+        # Default to transient for unknown errors
+        return ProviderResponse(
+            success=False,
+            error_type=ProviderErrorType.TRANSIENT,
+            error_message=error_msg,
+            should_retry=True
+        )
+    
+    async def _call_legacy_provider_api(
+        self,
+        provider,
+        service_id: int,
+        link: str,
+        quantity: int,
+        correlation_id: str
+    ) -> ProviderResponse:
+        """
+        Call provider API using legacy method (for non-plugsmms providers).
         Never leak provider internals to clients.
         """
         

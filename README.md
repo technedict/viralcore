@@ -320,6 +320,8 @@ setup_logging(
 - `SMMFLARE_API_KEY` - SMMFlare provider API key
 - `PLUGSMMS_API_KEY` - PlugSMMS provider API key  
 - `SMMSTONE_API_KEY` - SMMStone provider API key
+- `PLUGSMM_USE_NEW_API` - Enable new Plugsmm adapter (default: true)
+- `PLUGSMM_ENABLE_ORDER_TRACKING` - Enable order tracking (default: true)
 
 ### Provider Configuration
 Provider settings stored in `settings/provider_config.json`:
@@ -328,6 +330,36 @@ Provider settings stored in `settings/provider_config.json`:
   "active_provider": "smmstone"
 }
 ```
+
+#### Plugsmmservice Integration
+
+The Plugsmmservice provider uses a new adapter layer for improved reliability and error handling.
+
+**Key Features:**
+- PHP-compatible URL encoding for better compatibility
+- Comprehensive error classification (insufficient funds, rate limiting, etc.)
+- Detailed logging with correlation IDs
+- Feature flag for rollback capability
+- Support for order tracking, refills, and cancellations
+
+**Configuration:**
+```bash
+# Enable new API implementation (recommended)
+PLUGSMM_USE_NEW_API=true
+
+# Enable order tracking
+PLUGSMM_ENABLE_ORDER_TRACKING=true
+```
+
+**Rollback:**
+If issues arise, disable the new adapter:
+```bash
+PLUGSMM_USE_NEW_API=false
+```
+
+**Documentation:**
+- `PLUGSMM_API_MAPPING.md` - API changes and mapping table
+- `PLUGSMM_DEPLOYMENT_RUNBOOK.md` - Deployment and troubleshooting guide
 
 ### Message Templates
 Common templates in `utils/messaging.py`:
