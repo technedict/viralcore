@@ -2,6 +2,57 @@
 
 All notable changes to ViralCore Bot will be documented in this file.
 
+## [2.3.0] - 2025-10-05 - Likes Group Feature
+
+### 🎯 **Likes Group - Independent Admin Tracking**
+
+#### **Dual Group System**
+- **NEW**: Every post now sent to both Group 1 (existing) and Likes Group (new)
+- Group 1 continues to receive comments/retweets metrics (unchanged)
+- Likes Group receives `likes_needed` metric only
+- Likes Group exempt from rotation logic (receives every post)
+- Fail-safe design: Likes Group failures don't affect Group 1
+
+#### **Configuration**
+- Added `ADMIN_LIKES_GROUP_ENABLED` environment variable (default: `false`)
+- Added `ADMIN_LIKES_GROUP_CHAT_ID` environment variable for Likes Group chat ID
+- Feature can be toggled on/off without code changes
+
+#### **Deduplication & Metrics**
+- Built-in deduplication using TTL-based cache (1 hour)
+- Metrics tracking:
+  - `posts_sent_group1`: Group 1 sends
+  - `posts_sent_group2`: Likes Group sends
+  - `posts_failed_group2`: Likes Group failures
+  - `posts_deduped_group2`: Duplicate posts prevented
+
+#### **Structured Logging**
+- Correlation IDs (UUID v4) for tracking
+- UTC timestamps on all messages
+- Post metadata: post_id, likes_needed, post_type, correlation_id
+- Success/failure status logging
+
+#### **Files Added**
+- `utils/likes_group.py`: Core functionality
+- `tests/test_likes_group.py`: Unit tests
+- `tests/test_likes_group_integration.py`: Integration tests
+- `LIKES_GROUP_RUNBOOK.md`: Runbook and troubleshooting
+- `LIKES_GROUP_MESSAGE_TEMPLATES.md`: Payload specifications
+
+#### **Files Modified**
+- `handlers/link_submission_handlers.py`: Integrated Likes Group sending
+- `settings/bot_settings.py`: Added configuration
+- `.env.example`: Added environment variables
+- `README.md`: Added documentation
+
+#### **Backward Compatibility**
+- ✅ Feature disabled by default
+- ✅ No changes to existing Group 1 behavior
+- ✅ No breaking changes
+- ✅ Easy rollback via config
+
+---
+
 ## [2.2.0] - 2025-01-XX - Database Centralization & Enhanced Withdrawal System
 
 ### 🗄️ **Database Centralization**
