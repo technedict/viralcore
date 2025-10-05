@@ -437,7 +437,7 @@ USER_NOTIFICATION_TEMPLATES = {
         "body_template": """
 Your withdrawal request has been approved!
 
-💵 Amount: ${amount_usd} USD (₦{amount_ngn} NGN)
+💵 Amount: {amount_ngn}
 🏦 Bank: {bank_name}
 💳 Account: {account_number}
 📝 Request ID: {withdrawal_id}
@@ -455,7 +455,7 @@ You will be notified once the transfer is completed.
         "body_template": """
 Your withdrawal request has been rejected.
 
-💵 Amount: ${amount_usd} USD (₦{amount_ngn} NGN)
+💵 Amount: ₦{amount_ngn}
 🏦 Bank: {bank_name}
 💳 Account: {account_number}
 📝 Request ID: {withdrawal_id}
@@ -475,7 +475,7 @@ You can submit a new withdrawal request anytime.
         "body_template": """
 Your withdrawal has been completed successfully!
 
-💵 Amount: ${amount_usd} USD (₦{amount_ngn} NGN)
+💵 Amount: ₦{amount_ngn} NGN
 🏦 Bank: {bank_name}
 💳 Account: {account_number}
 📝 Request ID: {withdrawal_id}
@@ -546,7 +546,7 @@ async def notify_user_withdrawal_approved(
         message_body = template["body_template"].format(
             amount_usd=amount_usd,
             amount_ngn=int(amount_ngn),
-            bank_name=bank_name,
+            bank_name=bank_name.title(),
             account_number=masked_account,
             withdrawal_id=withdrawal_id,
             mode_specific_info=mode_info,
@@ -641,7 +641,7 @@ async def notify_user_withdrawal_rejected(
         message_body = template["body_template"].format(
             amount_usd=amount_usd,
             amount_ngn=int(amount_ngn),
-            bank_name=bank_name,
+            bank_name=bank_name.title(),
             account_number=masked_account,
             withdrawal_id=withdrawal_id,
             reason=reason
