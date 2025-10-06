@@ -444,7 +444,7 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
             context=context,
             post_id=pending["tweet_id"],
             content=pending["twitter_link"],
-            likes_needed=t_l,  # likes_needed is the target_likes
+            likes_needed=t_l-t_cm,  # likes_needed is the target_likes
             post_type="twitter",
         )
     except Exception as e:

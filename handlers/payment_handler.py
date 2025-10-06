@@ -453,7 +453,7 @@ class PaymentHandler:
                 logger.warning(f"Failed to edit timeout message for user {user_id}: {e}")
                 # Fallback to sending a new message if editing failed
                 try:
-                    await update.effective_chat.send_message("⏰ Payment window expired. Please try again.", parse_mode='MarkdownV2')
+                    await update.effective_chat.send_message("⏰ Payment window expired\\. Please try again\\.", parse_mode='MarkdownV2')
                 except Exception as e:
                     logger.error(f"Failed to send new timeout message for user {user_id}: {e}")
 
