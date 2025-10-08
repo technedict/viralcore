@@ -2,13 +2,15 @@
 # handlers/link_submission_handlers.py
 
 from telegram.helpers import escape_markdown
-import logging, re, os, json, math
+import logging, re, os, json, math, uuid
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackContext
 from utils.boost_utils import BoostManager
 from utils.notification import notify_admin
 from utils.messaging import escape_markdown_v2
 from utils.likes_group import send_to_likes_group, METRICS as LIKES_GROUP_METRICS
+from utils.scheduled_sends import scheduled_send_system
+from utils.logging import generate_correlation_id
 
 from settings.bot_settings import (
     COMMENT_GROUP_IDS,
@@ -224,19 +226,8 @@ async def process_twitter_link(
         await update.message.reply_text("❌ Invalid Twitter/X link.")
         return
 
-    # Duplicate check
-    conn = get_connection(TWEETS_DB_FILE)
-    if not conn:
-        await update.message.reply_text("❌ Internal error. Try again later.")
-        return
-
-    c = conn.cursor()
-    c.execute("SELECT 1 FROM tweets WHERE tweet_id = ?", (tweet_id,))
-    if c.fetchone():
-        conn.close()
-        await update.message.reply_text("❌ This link has already been submitted.")
-        return
-    conn.close()
+    # Duplicate check removed - users can now submit the same link multiple times
+    # Anti-abuse rate limiting is handled at the purchase/balance level
 
     # Check remaining posts
     user_id = update.effective_user.id
@@ -299,19 +290,8 @@ async def process_tg_link(
         # Proceed with your Telegram-specific logic here
         return
 
-    # Duplicate check
-    conn = get_connection(TG_DB_FILE)
-    if not conn:
-        await update.message.reply_text("❌ Internal error. Try again later.")
-        return
-
-    c = conn.cursor()
-    c.execute("SELECT 1 FROM telegram_posts WHERE tg_link = ?", (tg_link,))
-    if c.fetchone():
-        conn.close()
-        await update.message.reply_text("❌ This link has already been submitted.")
-        return
-    conn.close()
+    # Duplicate check removed - users can now submit the same link multiple times
+    # Anti-abuse rate limiting is handled at the purchase/balance level
 
     # Check remaining posts
     user_id = update.effective_user.id
@@ -421,18 +401,18 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
     new_pointer = (start_idx + i) % total_groups
     _set_batch_pointer(new_pointer)
 
-    # Schedule sends with MarkdownV2
-    for idx, chat_id in enumerate(batch_groups):
-        delay = idx * BATCH_INTERVAL_SECONDS
-        context.application.job_queue.run_once(
-            _send_to_group,
-            when=delay,
-            data={
-                'chat_id': chat_id,
-                'text': message_text,
-                'parse_mode': 'MarkdownV2'
-            }
-        )
+    # Schedule split sends using the new scheduled send system
+    # This will split into two halves: first half at T+30min, second half at T+60min
+    correlation_id = generate_correlation_id()
+    submission_id = f"x_{pending['tweet_id']}_{uuid.uuid4().hex[:8]}"
+    
+    scheduled_send_system.schedule_split_send(
+        submission_id=submission_id,
+        groups=batch_groups,
+        message_text=message_text,
+        parse_mode='MarkdownV2',
+        correlation_id=correlation_id
+    )
     
     # Track Group 1 send
     LIKES_GROUP_METRICS["posts_sent_group1"] += 1
@@ -555,18 +535,18 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
     new_pointer = (start_idx + i) % total_groups if total_groups else 0
     _set_batch_pointer(new_pointer)
 
-    # Schedule sends
-    for idx, chat_id in enumerate(batch_groups):
-        delay = idx * BATCH_INTERVAL_SECONDS
-        context.application.job_queue.run_once(
-            _send_to_group,
-            when=delay,
-            data={
-                'chat_id': chat_id,
-                'text': message_text,
-                'parse_mode': 'MarkdownV2'
-            }
-        )
+    # Schedule split sends using the new scheduled send system
+    # This will split into two halves: first half at T+30min, second half at T+60min
+    correlation_id = generate_correlation_id()
+    submission_id = f"tg_{pending['telegram_link']}_{uuid.uuid4().hex[:8]}"
+    
+    scheduled_send_system.schedule_split_send(
+        submission_id=submission_id,
+        groups=batch_groups,
+        message_text=message_text,
+        parse_mode='MarkdownV2',
+        correlation_id=correlation_id
+    )
     
     # Track Group 1 send
     LIKES_GROUP_METRICS["posts_sent_group1"] += 1

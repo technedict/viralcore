@@ -31,16 +31,43 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
     print(f"Admin message handler received text: {text}")
 
-    # 1) Broadcast message
+    # 1) Broadcast message (with optional image)
     if context.user_data.pop("awaiting_broadcast", None):
+        # Check if message has photo
+        photo = None
+        if update.message.photo:
+            # Get the largest photo
+            photo = update.message.photo[-1].file_id
+            # Caption is the text for photo messages
+            text = update.message.caption.strip() if update.message.caption else ""
+        else:
+            text = update.message.text.strip()
+        
         sent = 0
+        failed = 0
         for uid, *_ in get_all_users():
             try:
-                await context.bot.send_message(chat_id=uid, text=text)
+                if photo:
+                    # Send photo with caption
+                    await context.bot.send_photo(
+                        chat_id=uid, 
+                        photo=photo,
+                        caption=text if text else None
+                    )
+                else:
+                    # Send text only
+                    await context.bot.send_message(chat_id=uid, text=text)
                 sent += 1
-            except Exception:
-                logger.exception("Failed to broadcast to %s", uid)
-        await update.message.reply_text(f"✅ Broadcast sent to {sent} users.")
+            except Exception as e:
+                logger.exception("Failed to broadcast to %s: %s", uid, e)
+                failed += 1
+        
+        result_msg = f"✅ Broadcast sent to {sent} users."
+        if failed > 0:
+            result_msg += f"\n⚠️ Failed to send to {failed} users."
+        
+        await update.message.reply_text(result_msg)
+        logger.info(f"Broadcast completed: sent={sent}, failed={failed}, has_image={photo is not None}")
         return
 
     # 2) Add payment: "UserID, XUsername, Tier, Posts, TotalCost"

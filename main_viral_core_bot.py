@@ -221,6 +221,12 @@ async def main():
         filters.TEXT & ~filters.COMMAND,
         message_router
     ))
+    
+    # Photo handler for admin broadcast with images
+    app.add_handler(MessageHandler(
+        filters.PHOTO & ~filters.COMMAND,
+        message_router
+    ))
 
     logger.info("Bot is up and running!")
 
