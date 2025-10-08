@@ -3,6 +3,7 @@
 
 import logging
 import asyncio
+import os
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -25,6 +26,7 @@ from utils.db_utils import (
     init_tg_db
 )
 from utils.graceful_shutdown import shutdown_manager
+from utils.daily_report import init_daily_report_scheduler, get_daily_report_scheduler
 from handlers.start_handler import start
 from handlers.link_submission_handlers import (
     submitlink,
@@ -221,6 +223,18 @@ async def main():
         filters.TEXT & ~filters.COMMAND,
         message_router
     ))
+    
+    # Photo handler for admin broadcast with images
+    app.add_handler(MessageHandler(
+        filters.PHOTO & ~filters.COMMAND,
+        message_router
+    ))
+    
+    # Photo handler for admin broadcast with images
+    app.add_handler(MessageHandler(
+        filters.PHOTO & ~filters.COMMAND,
+        message_router
+    ))
 
     logger.info("Bot is up and running!")
 
@@ -244,6 +258,14 @@ async def main():
         # Initialize internals and start app
         await app.initialize()
         await app.start()
+        
+        # Initialize and start the daily report scheduler
+        # Get admin chat ID from environment or use default
+        admin_chat_id = int(os.getenv("ADMIN_TELEGRAM_CHAT_ID", "-4855378356"))
+        logger.info(f"Initializing daily report scheduler for admin chat {admin_chat_id}...")
+        daily_reporter = init_daily_report_scheduler(app.bot, admin_chat_id)
+        await daily_reporter.start()
+        logger.info("Daily report scheduler started (reports at 12:00 PM)")
 
         # Start the Updater/poller if available
         if hasattr(app, "updater") and hasattr(app.updater, "start_polling"):
@@ -276,6 +298,15 @@ async def main():
     finally:
         # ----- Clean shutdown -----
         logger.info("Starting clean shutdown of Application and background managers...")
+        
+        # Stop the daily report scheduler
+        try:
+            daily_reporter = get_daily_report_scheduler()
+            if daily_reporter:
+                logger.info("Stopping daily report scheduler...")
+                await daily_reporter.stop()
+        except Exception:
+            logger.exception("Error while stopping daily report scheduler")
 
         # First, let shutdown_manager do the heavy lifting: stop polling and close http client
         try:

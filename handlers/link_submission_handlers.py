@@ -224,19 +224,8 @@ async def process_twitter_link(
         await update.message.reply_text("❌ Invalid Twitter/X link.")
         return
 
-    # Duplicate check
-    conn = get_connection(TWEETS_DB_FILE)
-    if not conn:
-        await update.message.reply_text("❌ Internal error. Try again later.")
-        return
-
-    c = conn.cursor()
-    c.execute("SELECT 1 FROM tweets WHERE tweet_id = ?", (tweet_id,))
-    if c.fetchone():
-        conn.close()
-        await update.message.reply_text("❌ This link has already been submitted.")
-        return
-    conn.close()
+    # Duplicate check removed - users can now submit the same link multiple times
+    # Anti-abuse rate limiting is handled at the purchase/balance level
 
     # Check remaining posts
     user_id = update.effective_user.id
@@ -299,19 +288,8 @@ async def process_tg_link(
         # Proceed with your Telegram-specific logic here
         return
 
-    # Duplicate check
-    conn = get_connection(TG_DB_FILE)
-    if not conn:
-        await update.message.reply_text("❌ Internal error. Try again later.")
-        return
-
-    c = conn.cursor()
-    c.execute("SELECT 1 FROM telegram_posts WHERE tg_link = ?", (tg_link,))
-    if c.fetchone():
-        conn.close()
-        await update.message.reply_text("❌ This link has already been submitted.")
-        return
-    conn.close()
+    # Duplicate check removed - users can now submit the same link multiple times
+    # Anti-abuse rate limiting is handled at the purchase/balance level
 
     # Check remaining posts
     user_id = update.effective_user.id

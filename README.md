@@ -2,6 +2,40 @@
 
 A comprehensive Telegram bot for managing viral content engagement and affiliate rewards with enhanced security, reliability, and provider safety.
 
+## New Features (v2.3.0)
+
+### ⏰ Scheduled Boost Timing (30min + 30min)
+- **Smart API Scheduling**: Link boosts split into two halves sent to boosting API
+- **First Half**: Views and likes sent 30 minutes after submission
+- **Second Half**: Remaining views and likes sent 30 minutes after first half
+- **Organic Pattern**: Creates more natural-looking engagement over time
+- **Configurable**: Timing intervals in `utils/boost_utils.py`
+
+### 📸 Admin Broadcast with Images
+- **Image Support**: Admins can attach images to broadcast messages
+- **Flexible**: Supports text-only or image+caption broadcasts
+- **Safe Fallback**: Gracefully handles users who can't receive images
+- **Error Tracking**: Reports failed sends to admins
+- **Supported Formats**: JPEG, PNG, GIF (up to 10MB, 1024 char caption)
+
+### 🔄 Duplicate Link Submissions
+- **Removed Restriction**: Users can now submit the same link multiple times
+- **Anti-Abuse**: Protection via purchase/balance limits and post credits
+- **Flexible Campaigns**: Allows re-boosting popular content
+- **Backward Compatible**: No changes to existing submission flow
+
+### 📊 Daily Link Submission Reports
+- **Automated Reporting**: Daily reports sent to admin group at 12:00 PM
+- **Comprehensive Stats**: Counts of Twitter/X and Telegram link submissions
+- **Scheduled Delivery**: Automatic daily schedule, no manual intervention needed
+- **Admin Monitoring**: Easy tracking of platform usage and engagement
+
+### 🗄️ Database Persistence Enhancements
+- **Ephemeral Storage Warning**: Startup check warns if DB_DIR points to temporary storage
+- **Centralized Storage**: All databases in `./db` directory by default
+- **Production Ready**: Ensures data survives restarts and deployments
+- **Groups.db Focus**: Special attention to groups.db persistence issues
+
 ## New Features (v2.1.0)
 
 ### 🎯 Likes Group - Independent Admin Tracking (v2.2.0)
@@ -322,6 +356,8 @@ setup_logging(
 - `SMMSTONE_API_KEY` - SMMStone provider API key
 - `PLUGSMM_USE_NEW_API` - Enable new Plugsmm adapter (default: true)
 - `PLUGSMM_ENABLE_ORDER_TRACKING` - Enable order tracking (default: true)
+- `DB_DIR` - Database directory path (default: ./db)
+- `ADMIN_TELEGRAM_CHAT_ID` - Admin group for notifications and daily reports
 
 ### Provider Configuration
 Provider settings stored in `settings/provider_config.json`:

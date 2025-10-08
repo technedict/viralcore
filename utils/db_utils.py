@@ -10,6 +10,17 @@ DB_DIR = os.getenv("DB_DIR", "./db")
 # Ensure DB directory exists
 Path(DB_DIR).mkdir(parents=True, exist_ok=True)
 
+# Warn if DB_DIR points to ephemeral storage
+_db_path = Path(DB_DIR).resolve()
+if str(_db_path).startswith(('/tmp', '/var/tmp')):
+    import warnings
+    warnings.warn(
+        f"⚠️  DB_DIR is set to ephemeral storage: {_db_path}\n"
+        f"Database files will be lost on restart. Set DB_DIR to persistent storage.",
+        UserWarning,
+        stacklevel=2
+    )
+
 # Database file paths - all in centralized directory
 DB_FILE = str(Path(DB_DIR) / "viralcore.db")
 TWEETS_DB_FILE = str(Path(DB_DIR) / "tweets.db")
