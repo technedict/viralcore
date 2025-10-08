@@ -27,7 +27,7 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
     Catch replies to admin prompts and perform the corresponding DB action.
     Flags set in context.user_data indicate which action to take.
     """
-    text = update.message.text.strip()
+    text = update.message.text.strip() if update.message.text else None
 
     print(f"Admin message handler received text: {text}")
 
@@ -41,7 +41,7 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
             # Caption is the text for photo messages
             text = update.message.caption.strip() if update.message.caption else ""
         else:
-            text = update.message.text.strip()
+            text = update.message.text.strip() if update.message.text else ""
         
         sent = 0
         failed = 0
