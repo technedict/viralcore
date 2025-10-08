@@ -23,6 +23,10 @@ from utils.job_system import job_system, Job, JobStatus, JobType, BoostJobPayloa
 
 logger = get_logger(__name__)
 
+# Phased boosting intervals (matching legacy implementation)
+FIRST_BOOST_INTERVAL_SECONDS = 30 * 60  # 30 minutes
+SECOND_BOOST_INTERVAL_SECONDS = 30 * 60  # 30 minutes
+
 
 class ProviderErrorType(Enum):
     """Classification of provider errors."""
@@ -230,8 +234,85 @@ class EnhancedBoostService:
         provider,
         payload: BoostJobPayload
     ) -> bool:
-        """Execute boost with retry logic and circuit breaker."""
+        """Execute boost with phased timing, retry logic and circuit breaker."""
         
+        # Implement phased boosting: split into two batches with 30-minute delays
+        first_half_views = payload.views // 2
+        first_half_likes = payload.likes // 2
+        remaining_views = payload.views - first_half_views
+        remaining_likes = payload.likes - first_half_likes
+        
+        # First 30-minute delay before first batch
+        if first_half_views > 0 or first_half_likes > 0:
+            logger.info(
+                f"[BoostManager] Waiting {FIRST_BOOST_INTERVAL_SECONDS//60}m before first batch for job {job.job_id}",
+                extra={'job_id': job.job_id, 'correlation_id': job.correlation_id}
+            )
+            await asyncio.sleep(FIRST_BOOST_INTERVAL_SECONDS)
+            
+            # Send first half of views
+            if first_half_views > 0:
+                if not await self._send_boost_with_retries(
+                    job, provider, provider.view_service_id, 
+                    payload.link, first_half_views, "views (first half)"
+                ):
+                    return False
+            
+            # Send first half of likes
+            if first_half_likes > 0:
+                if not await self._send_boost_with_retries(
+                    job, provider, provider.like_service_id,
+                    payload.link, first_half_likes, "likes (first half)"
+                ):
+                    return False
+            
+            logger.info(
+                f"[BoostManager] First batch sent: {first_half_views} views, {first_half_likes} likes for job {job.job_id}",
+                extra={'job_id': job.job_id}
+            )
+        
+        # Second 30-minute delay before second batch
+        if remaining_views > 0 or remaining_likes > 0:
+            logger.info(
+                f"[BoostManager] Waiting {SECOND_BOOST_INTERVAL_SECONDS//60}m before second batch for job {job.job_id}",
+                extra={'job_id': job.job_id}
+            )
+            await asyncio.sleep(SECOND_BOOST_INTERVAL_SECONDS)
+            
+            # Send remaining views
+            if remaining_views > 0:
+                if not await self._send_boost_with_retries(
+                    job, provider, provider.view_service_id,
+                    payload.link, remaining_views, "views (second half)"
+                ):
+                    return False
+            
+            # Send remaining likes
+            if remaining_likes > 0:
+                if not await self._send_boost_with_retries(
+                    job, provider, provider.like_service_id,
+                    payload.link, remaining_likes, "likes (second half)"
+                ):
+                    return False
+            
+            logger.info(
+                f"[BoostManager] Second batch sent: {remaining_views} views, {remaining_likes} likes for job {job.job_id}",
+                extra={'job_id': job.job_id}
+            )
+        
+        logger.info(f"[BoostManager] Successfully completed phased boost for job {job.job_id}")
+        return True
+    
+    async def _send_boost_with_retries(
+        self,
+        job: Job,
+        provider,
+        service_id: int,
+        link: str,
+        quantity: int,
+        boost_type: str
+    ) -> bool:
+        """Send a single boost request with retry logic."""
         retry_count = 0
         
         while retry_count <= self.max_retries:
@@ -250,67 +331,39 @@ class EnhancedBoostService:
                 jitter = delay * self.jitter_max * (0.5 - asyncio.get_event_loop().time() % 1)
                 await asyncio.sleep(delay + jitter)
             
-            # Try views boost
-            if payload.views > 0:
-                response = await self._call_provider_api(
-                    provider, 
-                    provider.view_service_id,
-                    payload.link,
-                    payload.views,
-                    job.correlation_id
-                )
-                
-                if not response.success:
-                    if response.error_type == ProviderErrorType.PERMANENT:
-                        logger.warning(f"Permanent error for job {job.job_id} - not retrying")
-                        self.circuit_breaker.record_failure()
-                        return False
-                    elif response.error_type == ProviderErrorType.RATE_LIMITED:
-                        logger.warning(f"Rate limited for job {job.job_id}")
-                        self.circuit_breaker.record_failure()
-                        # Wait for rate limit
-                        if response.retry_after:
-                            await asyncio.sleep(response.retry_after)
-                        retry_count += 1
-                        continue
-                    elif response.error_type == ProviderErrorType.INSUFFICIENT_FUNDS:
-                        await self._notify_admin_insufficient_funds(job, provider)
-                        return False
-                    else:
-                        # Transient error - retry
-                        retry_count += 1
-                        continue
+            # Try to send boost
+            response = await self._call_provider_api(
+                provider, 
+                service_id,
+                link,
+                quantity,
+                job.correlation_id
+            )
             
-            # Try likes boost  
-            if payload.likes > 0:
-                response = await self._call_provider_api(
-                    provider,
-                    provider.like_service_id,
-                    payload.link,
-                    payload.likes,
-                    job.correlation_id
-                )
-                
-                if not response.success:
-                    # Same error handling as views
-                    if response.error_type == ProviderErrorType.PERMANENT:
-                        self.circuit_breaker.record_failure()
-                        return False
-                    elif response.error_type == ProviderErrorType.RATE_LIMITED:
-                        self.circuit_breaker.record_failure()
-                        if response.retry_after:
-                            await asyncio.sleep(response.retry_after)
-                        retry_count += 1
-                        continue
-                    elif response.error_type == ProviderErrorType.INSUFFICIENT_FUNDS:
-                        await self._notify_admin_insufficient_funds(job, provider)
-                        return False
-                    else:
-                        retry_count += 1
-                        continue
+            if not response.success:
+                if response.error_type == ProviderErrorType.PERMANENT:
+                    logger.warning(f"Permanent error for {boost_type} in job {job.job_id} - not retrying")
+                    self.circuit_breaker.record_failure()
+                    return False
+                elif response.error_type == ProviderErrorType.RATE_LIMITED:
+                    logger.warning(f"Rate limited for {boost_type} in job {job.job_id}")
+                    self.circuit_breaker.record_failure()
+                    # Wait for rate limit
+                    if response.retry_after:
+                        await asyncio.sleep(response.retry_after)
+                    retry_count += 1
+                    continue
+                elif response.error_type == ProviderErrorType.INSUFFICIENT_FUNDS:
+                    await self._notify_admin_insufficient_funds(job, provider)
+                    return False
+                else:
+                    # Transient error - retry
+                    retry_count += 1
+                    continue
             
             # Success
             self.circuit_breaker.record_success()
+            logger.info(f"Successfully sent {boost_type} for job {job.job_id}")
             return True
         
         # All retries exhausted
