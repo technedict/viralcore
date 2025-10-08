@@ -25,6 +25,7 @@ from utils.db_utils import (
     init_tg_db
 )
 from utils.graceful_shutdown import shutdown_manager
+from utils.scheduled_send_worker import init_worker, get_worker
 from handlers.start_handler import start
 from handlers.link_submission_handlers import (
     submitlink,
@@ -250,6 +251,16 @@ async def main():
         # Initialize internals and start app
         await app.initialize()
         await app.start()
+        
+        # Initialize and start the scheduled send worker
+        # This needs to be done after app.start() so we have access to the bot context
+        logger.info("Initializing scheduled send worker...")
+        # Create a context-like object for the worker
+        from telegram.ext import Application
+        # The worker needs access to the bot, we'll pass the app itself
+        worker = init_worker(app)
+        await worker.start()
+        logger.info("Scheduled send worker started")
 
         # Start the Updater/poller if available
         if hasattr(app, "updater") and hasattr(app.updater, "start_polling"):
@@ -282,6 +293,15 @@ async def main():
     finally:
         # ----- Clean shutdown -----
         logger.info("Starting clean shutdown of Application and background managers...")
+        
+        # Stop the scheduled send worker first
+        try:
+            worker = get_worker()
+            if worker:
+                logger.info("Stopping scheduled send worker...")
+                await worker.stop()
+        except Exception:
+            logger.exception("Error while stopping scheduled send worker")
 
         # First, let shutdown_manager do the heavy lifting: stop polling and close http client
         try:

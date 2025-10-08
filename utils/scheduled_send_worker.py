@@ -7,9 +7,10 @@ Runs in background and executes sends at their scheduled time.
 import asyncio
 from datetime import datetime
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from telegram.ext import ContextTypes
+if TYPE_CHECKING:
+    from telegram.ext import Application
 
 from utils.scheduled_sends import scheduled_send_system, ScheduledSend
 from utils.logging import get_logger
@@ -20,15 +21,15 @@ logger = get_logger(__name__)
 class ScheduledSendWorker:
     """Background worker for executing scheduled sends."""
     
-    def __init__(self, context: ContextTypes.DEFAULT_TYPE, check_interval: int = 60):
+    def __init__(self, app: 'Application', check_interval: int = 60):
         """
         Initialize worker.
         
         Args:
-            context: Telegram context for sending messages
+            app: Telegram Application for sending messages
             check_interval: How often to check for due sends (seconds)
         """
-        self.context = context
+        self.app = app
         self.check_interval = check_interval
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -90,7 +91,7 @@ class ScheduledSendWorker:
                 f"half={send.half_number}, correlation_id={send.correlation_id}"
             )
             
-            await self.context.bot.send_message(
+            await self.app.bot.send_message(
                 chat_id=send.chat_id,
                 text=send.message_text,
                 parse_mode=send.parse_mode
@@ -121,10 +122,10 @@ class ScheduledSendWorker:
 _worker: Optional[ScheduledSendWorker] = None
 
 
-def init_worker(context: ContextTypes.DEFAULT_TYPE):
+def init_worker(app: 'Application'):
     """Initialize the global worker."""
     global _worker
-    _worker = ScheduledSendWorker(context)
+    _worker = ScheduledSendWorker(app)
     return _worker
 
 

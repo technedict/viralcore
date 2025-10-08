@@ -2,6 +2,34 @@
 
 A comprehensive Telegram bot for managing viral content engagement and affiliate rewards with enhanced security, reliability, and provider safety.
 
+## New Features (v2.3.0)
+
+### 🕐 Scheduled Split-Send System
+- **Smart Timing**: Link submissions automatically split into two halves
+- **First Half**: Sent 30 minutes after submission
+- **Second Half**: Sent 60 minutes after submission (30 min after first half)
+- **Restart Resilient**: Scheduled sends survive bot restarts via persistent storage
+- **Idempotency**: Prevents duplicate sends with automatic deduplication
+- **Structured Logging**: Full correlation IDs and timestamps for tracking
+
+### 📸 Admin Broadcast with Images
+- **Image Support**: Admins can attach images to broadcast messages
+- **Flexible**: Supports text-only or image+caption broadcasts
+- **Safe Fallback**: Gracefully handles users who can't receive images
+- **Error Tracking**: Reports failed sends to admins
+- **Supported Formats**: JPEG, PNG, GIF (up to 10MB, 1024 char caption)
+
+### 🔄 Duplicate Link Submissions
+- **Removed Restriction**: Users can now submit the same link multiple times
+- **Anti-Abuse**: Protection via purchase/balance limits and post credits
+- **Flexible Campaigns**: Allows re-boosting popular content
+- **Backward Compatible**: No changes to existing submission flow
+
+### 🗄️ Database Persistence Enhancements
+- **Ephemeral Storage Warning**: Startup check warns if DB_DIR points to temporary storage
+- **Centralized Storage**: All databases in `./db` directory by default
+- **Production Ready**: Ensures data survives restarts and deployments
+
 ## New Features (v2.1.0)
 
 ### 🎯 Likes Group - Independent Admin Tracking (v2.2.0)
@@ -322,6 +350,8 @@ setup_logging(
 - `SMMSTONE_API_KEY` - SMMStone provider API key
 - `PLUGSMM_USE_NEW_API` - Enable new Plugsmm adapter (default: true)
 - `PLUGSMM_ENABLE_ORDER_TRACKING` - Enable order tracking (default: true)
+- `SCHEDULED_SEND_CHECK_INTERVAL` - Interval for checking scheduled sends in seconds (default: 60)
+- `DB_DIR` - Database directory path (default: ./db)
 
 ### Provider Configuration
 Provider settings stored in `settings/provider_config.json`:
