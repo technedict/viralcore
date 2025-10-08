@@ -10,7 +10,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from utils.db_utils import get_connection, TWEETS_DB_FILE, TG_DB_FILE
+from utils.db_utils import get_connection, TWEETS_DB_FILE, TG_DB_FILE, init_tweet_db, init_tg_db
 
 
 class TestDuplicateLinkSubmission:
@@ -19,6 +19,10 @@ class TestDuplicateLinkSubmission:
     @pytest.fixture(autouse=True)
     def setup_teardown(self):
         """Setup and teardown for each test."""
+        # Initialize databases
+        init_tweet_db()
+        init_tg_db()
+        
         # Clear tweets table before each test
         with get_connection(TWEETS_DB_FILE) as conn:
             c = conn.cursor()

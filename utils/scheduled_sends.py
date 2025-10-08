@@ -239,11 +239,10 @@ class ScheduledSendSystem:
             ''', (now,))
             
             rows = c.fetchall()
-            sends = [self._row_to_send(row) for row in rows]
             
             # Mark as in_progress to prevent duplicate execution
-            if sends:
-                send_ids = [s.send_id for s in sends]
+            if rows:
+                send_ids = [row['send_id'] for row in rows]
                 placeholders = ','.join(['?'] * len(send_ids))
                 c.execute(f'''
                     UPDATE scheduled_sends
@@ -252,6 +251,20 @@ class ScheduledSendSystem:
                 ''', send_ids)
             
             conn.commit()
+            
+            # Convert rows to ScheduledSend objects after update
+            # Re-fetch to get updated status
+            if rows:
+                send_ids = [row['send_id'] for row in rows]
+                placeholders = ','.join(['?'] * len(send_ids))
+                c.execute(f'''
+                    SELECT * FROM scheduled_sends
+                    WHERE send_id IN ({placeholders})
+                ''', send_ids)
+                updated_rows = c.fetchall()
+                sends = [self._row_to_send(row) for row in updated_rows]
+            else:
+                sends = []
         
         return sends
     
