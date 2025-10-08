@@ -2,15 +2,13 @@
 # handlers/link_submission_handlers.py
 
 from telegram.helpers import escape_markdown
-import logging, re, os, json, math, uuid
+import logging, re, os, json, math
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackContext
 from utils.boost_utils import BoostManager
 from utils.notification import notify_admin
 from utils.messaging import escape_markdown_v2
 from utils.likes_group import send_to_likes_group, METRICS as LIKES_GROUP_METRICS
-from utils.scheduled_sends import scheduled_send_system
-from utils.logging import generate_correlation_id
 
 from settings.bot_settings import (
     COMMENT_GROUP_IDS,
@@ -401,18 +399,18 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
     new_pointer = (start_idx + i) % total_groups
     _set_batch_pointer(new_pointer)
 
-    # Schedule split sends using the new scheduled send system
-    # This will split into two halves: first half at T+30min, second half at T+60min
-    correlation_id = generate_correlation_id()
-    submission_id = f"x_{pending['tweet_id']}_{uuid.uuid4().hex[:8]}"
-    
-    scheduled_send_system.schedule_split_send(
-        submission_id=submission_id,
-        groups=batch_groups,
-        message_text=message_text,
-        parse_mode='MarkdownV2',
-        correlation_id=correlation_id
-    )
+    # Schedule sends with MarkdownV2
+    for idx, chat_id in enumerate(batch_groups):
+        delay = idx * BATCH_INTERVAL_SECONDS
+        context.application.job_queue.run_once(
+            _send_to_group,
+            when=delay,
+            data={
+                'chat_id': chat_id,
+                'text': message_text,
+                'parse_mode': 'MarkdownV2'
+            }
+        )
     
     # Track Group 1 send
     LIKES_GROUP_METRICS["posts_sent_group1"] += 1
@@ -535,18 +533,18 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
     new_pointer = (start_idx + i) % total_groups if total_groups else 0
     _set_batch_pointer(new_pointer)
 
-    # Schedule split sends using the new scheduled send system
-    # This will split into two halves: first half at T+30min, second half at T+60min
-    correlation_id = generate_correlation_id()
-    submission_id = f"tg_{pending['telegram_link']}_{uuid.uuid4().hex[:8]}"
-    
-    scheduled_send_system.schedule_split_send(
-        submission_id=submission_id,
-        groups=batch_groups,
-        message_text=message_text,
-        parse_mode='MarkdownV2',
-        correlation_id=correlation_id
-    )
+    # Schedule sends
+    for idx, chat_id in enumerate(batch_groups):
+        delay = idx * BATCH_INTERVAL_SECONDS
+        context.application.job_queue.run_once(
+            _send_to_group,
+            when=delay,
+            data={
+                'chat_id': chat_id,
+                'text': message_text,
+                'parse_mode': 'MarkdownV2'
+            }
+        )
     
     # Track Group 1 send
     LIKES_GROUP_METRICS["posts_sent_group1"] += 1

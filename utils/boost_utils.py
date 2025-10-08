@@ -25,8 +25,8 @@ logger.setLevel(logging.INFO)
 
 # --- Constants ---
 # Intervals for phased boosting
-FIRST_BOOST_INTERVAL_SECONDS = 15 * 60  # 15 minutes
-SECOND_BOOST_INTERVAL_SECONDS = 45 * 60 # 45 minutes
+FIRST_BOOST_INTERVAL_SECONDS = 30 * 60  # 30 minutes
+SECOND_BOOST_INTERVAL_SECONDS = 30 * 60 # 30 minutes
 
 # Retry configuration for ordering boosts
 # >>> MISSING VALUES ADDED HERE <<<
