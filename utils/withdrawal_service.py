@@ -396,7 +396,7 @@ class WithdrawalService:
                                 
                                 if result.rowcount == 0:
                                     # Insufficient balance
-                                    d.execute("SELECT change_amount FROM balance_changes WHERE user_id = ?", (withdrawal.user_id,))
+                                    d.execute("SELECT change_amount FROM balance_changes WHERE usid = ?", (withdrawal.user_id,))
                                     bal_row = d.fetchone()
                                     current_balance = bal_row['change_amount'] if bal_row else 0.0
                                     logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
@@ -729,7 +729,7 @@ class WithdrawalService:
                             
                             if result.rowcount == 0:
                                 # Insufficient balance
-                                d.execute("SELECT change_amount FROM balance_changes WHERE user_id = ?", (withdrawal.user_id,))
+                                d.execute("SELECT change_amount FROM balance_changes WHERE usid = ?", (withdrawal.user_id,))
                                 bal_row = d.fetchone()
                                 current_balance = bal_row['change_amount'] if bal_row else 0.0
                                 logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
@@ -842,7 +842,7 @@ class WithdrawalService:
                             
                             if result.rowcount == 0:
                                 # Insufficient balance
-                                d.execute("SELECT change_amount FROM balance_changes WHERE user_id = ?", (withdrawal.user_id,))
+                                d.execute("SELECT change_amount FROM balance_changes WHERE usid = ?", (withdrawal.user_id,))
                                 bal_row = d.fetchone()
                                 current_balance = bal_row['change_amount'] if bal_row else 0.0
                                 logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")

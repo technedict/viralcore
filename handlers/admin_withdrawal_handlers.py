@@ -288,12 +288,12 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        msg = await query.message.reply_text(
+        # Edit the original message instead of replying
+        await query.edit_message_text(
             success_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
-        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         
         # Notify user of approval
         import asyncio
@@ -391,12 +391,12 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        msg = await query.message.reply_text(
+        # Edit the original message instead of replying
+        await query.edit_message_text(
             success_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
-        context.chat_data.setdefault("bot_messages", []).append(msg.message_id)
         
         # Notify user of rejection
         import asyncio

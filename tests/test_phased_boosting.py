@@ -61,7 +61,7 @@ async def test_phased_boosting_timing():
     mock_provider.like_service_id = 2
     
     mock_payload = MagicMock()
-    mock_payload.views = 100
+    mock_payload.views = 2500  # Will require 3 batches (1k, 1k, 500)
     mock_payload.likes = 50
     mock_payload.link = "https://test.com"
     
@@ -74,9 +74,9 @@ async def test_phased_boosting_timing():
     original_first = boost_module.FIRST_BOOST_INTERVAL_SECONDS
     original_second = boost_module.SECOND_BOOST_INTERVAL_SECONDS
     
-    # Use 1 second intervals for testing
-    boost_module.FIRST_BOOST_INTERVAL_SECONDS = 1
-    boost_module.SECOND_BOOST_INTERVAL_SECONDS = 1
+    # Use 0.5 second intervals for testing
+    boost_module.FIRST_BOOST_INTERVAL_SECONDS = 0.5
+    boost_module.SECOND_BOOST_INTERVAL_SECONDS = 0.5
     
     try:
         result = await service._execute_boost_with_retries(mock_job, mock_provider, mock_payload)
@@ -85,14 +85,14 @@ async def test_phased_boosting_timing():
         total_time = end_time - start_time
         
         # Should have called _send_boost_with_retries 4 times:
-        # 1. First half views (after 1 sec delay)
-        # 2. First half likes (after 1 sec delay)
-        # 3. Second half views (after 1 sec delay)
-        # 4. Second half likes (after 1 sec delay)
+        # 1. Batch 1: 1000 views
+        # 2. Batch 2: 1000 views
+        # 3. Batch 3: 500 views
+        # 4. Batch 3: 50 likes (with final batch)
         assert len(call_times) == 4, f"Expected 4 calls, got {len(call_times)}"
         
-        # Total time should be at least 2 seconds (2 intervals of 1 second each)
-        assert total_time >= 2.0, f"Expected at least 2 seconds, got {total_time}"
+        # Total time should be at least 1.5 seconds (3 intervals of 0.5 seconds each)
+        assert total_time >= 1.5, f"Expected at least 1.5 seconds, got {total_time}"
         
         # Result should be True (success)
         assert result == True, f"Expected success, got {result}"
@@ -137,8 +137,8 @@ async def test_phased_boosting_splits_correctly():
     mock_provider.like_service_id = 2
     
     mock_payload = MagicMock()
-    mock_payload.views = 100
-    mock_payload.likes = 50
+    mock_payload.views = 2500  # Will require 3 batches (1k, 1k, 500)
+    mock_payload.likes = 150
     mock_payload.link = "https://test.com"
     
     # Temporarily override the intervals for faster testing
@@ -151,35 +151,100 @@ async def test_phased_boosting_splits_correctly():
     try:
         result = await service._execute_boost_with_retries(mock_job, mock_provider, mock_payload)
         
-        # Check that we have 4 calls
+        # Check that we have 4 calls: 3 view batches + 1 likes batch
         assert len(call_log) == 4, f"Expected 4 calls, got {len(call_log)}"
         
-        # First batch should have half the quantities
-        views_first = [c for c in call_log if 'first half' in c['type'] and c['service_id'] == 1]
-        likes_first = [c for c in call_log if 'first half' in c['type'] and c['service_id'] == 2]
+        # First batch should have 1000 views
+        views_batch_1 = [c for c in call_log if 'batch 1' in c['type'] and c['service_id'] == 1]
+        assert len(views_batch_1) == 1, "Expected 1 view batch 1 call"
+        assert views_batch_1[0]['quantity'] == 1000, f"Expected 1000 views in batch 1, got {views_batch_1[0]['quantity']}"
         
-        assert len(views_first) == 1, "Expected 1 first half views call"
-        assert views_first[0]['quantity'] == 50, f"Expected 50 views in first batch, got {views_first[0]['quantity']}"
+        # Second batch should have 1000 views
+        views_batch_2 = [c for c in call_log if 'batch 2' in c['type'] and c['service_id'] == 1]
+        assert len(views_batch_2) == 1, "Expected 1 view batch 2 call"
+        assert views_batch_2[0]['quantity'] == 1000, f"Expected 1000 views in batch 2, got {views_batch_2[0]['quantity']}"
         
-        assert len(likes_first) == 1, "Expected 1 first half likes call"
-        assert likes_first[0]['quantity'] == 25, f"Expected 25 likes in first batch, got {likes_first[0]['quantity']}"
+        # Third batch should have 500 views
+        views_batch_3 = [c for c in call_log if 'batch 3' in c['type'] and c['service_id'] == 1]
+        assert len(views_batch_3) == 1, "Expected 1 view batch 3 call"
+        assert views_batch_3[0]['quantity'] == 500, f"Expected 500 views in batch 3, got {views_batch_3[0]['quantity']}"
         
-        # Second batch should have remaining quantities
-        views_second = [c for c in call_log if 'second half' in c['type'] and c['service_id'] == 1]
-        likes_second = [c for c in call_log if 'second half' in c['type'] and c['service_id'] == 2]
+        # All likes should be sent with the final batch
+        likes_calls = [c for c in call_log if c['service_id'] == 2]
+        assert len(likes_calls) == 1, f"Expected 1 likes call, got {len(likes_calls)}"
+        assert likes_calls[0]['quantity'] == 150, f"Expected 150 likes, got {likes_calls[0]['quantity']}"
+        assert 'final batch' in likes_calls[0]['type'], "Likes should be sent with final batch"
         
-        assert len(views_second) == 1, "Expected 1 second half views call"
-        assert views_second[0]['quantity'] == 50, f"Expected 50 views in second batch, got {views_second[0]['quantity']}"
-        
-        assert len(likes_second) == 1, "Expected 1 second half likes call"
-        assert likes_second[0]['quantity'] == 25, f"Expected 25 likes in second batch, got {likes_second[0]['quantity']}"
-        
-        print("✓ Phased boosting correctly splits views and likes into two batches")
+        print("✓ Phased boosting correctly sends views in 1k batches and all likes with final batch")
         
     finally:
         # Restore original intervals
         boost_module.FIRST_BOOST_INTERVAL_SECONDS = original_first
         boost_module.SECOND_BOOST_INTERVAL_SECONDS = original_second
+    
+    return True
+
+
+async def test_phased_boosting_small_views():
+    """Test that views less than 1k are sent in a single batch with all likes."""
+    from utils.boost_utils_enhanced import EnhancedBoostService
+    
+    # Create service instance
+    service = EnhancedBoostService()
+    
+    # Mock the _send_boost_with_retries method to track quantities
+    call_log = []
+    
+    async def mock_send(job, provider, service_id, link, quantity, boost_type):
+        call_log.append({
+            'service_id': service_id,
+            'quantity': quantity,
+            'type': boost_type
+        })
+        return True
+    
+    service._send_boost_with_retries = mock_send
+    
+    # Mock job and provider
+    mock_job = MagicMock()
+    mock_job.job_id = "test-job-789"
+    mock_job.correlation_id = "test-correlation-id"
+    
+    mock_provider = MagicMock()
+    mock_provider.view_service_id = 1
+    mock_provider.like_service_id = 2
+    
+    mock_payload = MagicMock()
+    mock_payload.views = 500  # Less than 1k
+    mock_payload.likes = 100
+    mock_payload.link = "https://test.com"
+    
+    # Temporarily override the intervals for faster testing
+    import utils.boost_utils_enhanced as boost_module
+    original_first = boost_module.FIRST_BOOST_INTERVAL_SECONDS
+    boost_module.FIRST_BOOST_INTERVAL_SECONDS = 0.1
+    
+    try:
+        result = await service._execute_boost_with_retries(mock_job, mock_provider, mock_payload)
+        
+        # Check that we have 2 calls: 1 view batch + 1 likes batch
+        assert len(call_log) == 2, f"Expected 2 calls, got {len(call_log)}"
+        
+        # First batch should have 500 views
+        views_batch = [c for c in call_log if c['service_id'] == 1]
+        assert len(views_batch) == 1, "Expected 1 view batch call"
+        assert views_batch[0]['quantity'] == 500, f"Expected 500 views, got {views_batch[0]['quantity']}"
+        
+        # All likes should be sent with the final (only) batch
+        likes_calls = [c for c in call_log if c['service_id'] == 2]
+        assert len(likes_calls) == 1, f"Expected 1 likes call, got {len(likes_calls)}"
+        assert likes_calls[0]['quantity'] == 100, f"Expected 100 likes, got {likes_calls[0]['quantity']}"
+        
+        print("✓ Small view count correctly sends in single batch with all likes")
+        
+    finally:
+        # Restore original intervals
+        boost_module.FIRST_BOOST_INTERVAL_SECONDS = original_first
     
     return True
 
@@ -193,6 +258,7 @@ def main():
             # Run tests
             await test_phased_boosting_timing()
             await test_phased_boosting_splits_correctly()
+            await test_phased_boosting_small_views()
             
             print("\n✅ All phased boosting tests passed!")
             return 0
