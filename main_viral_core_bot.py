@@ -309,27 +309,47 @@ async def main():
             logger.exception("Error while stopping daily report scheduler")
 
         # First, let shutdown_manager do the heavy lifting: stop polling and close http client
-        try:
-            await shutdown_manager.graceful_shutdown()
-        except Exception:
-            logger.exception("Error during graceful_shutdown")
-
-        # Then stop the updater and application as additional cleanup
-        if hasattr(app, "updater") and hasattr(app.updater, "stop_polling"):
+        # Only call if not already called by signal handler
+        if not shutdown_manager.shutdown_requested:
             try:
-                await app.updater.stop_polling()
-                logger.info("Updater polling stopped.")
+                await shutdown_manager.graceful_shutdown()
             except Exception:
-                logger.exception("Error while stopping updater polling")
+                logger.exception("Error during graceful_shutdown")
+        else:
+            logger.info("Shutdown already initiated by signal handler, skipping duplicate shutdown")
 
+        # Stop the application (bot and updater)
+        # Note: shutdown_manager.graceful_shutdown() already stopped polling and closed HTTP client
         try:
             await app.stop()
+            logger.info("Application stopped.")
         except Exception:
             logger.exception("Error during app.stop()")
 
+        # Call app.shutdown() only if updater is not running
+        # This avoids "RuntimeError: This Updater is still running!"
         try:
+            if hasattr(app, "updater"):
+                updater = app.updater
+                # Check if updater is still running
+                is_running = getattr(updater, "running", False) or getattr(updater, "is_running", False)
+                if is_running:
+                    logger.info("Waiting for updater to fully stop...")
+                    # Give it a moment to stop
+                    await asyncio.sleep(1.0)
+                    # Check again
+                    is_running = getattr(updater, "running", False) or getattr(updater, "is_running", False)
+                    if is_running:
+                        logger.warning("Updater still running after wait, forcing stop")
+            
             if hasattr(app, "shutdown"):
                 await app.shutdown()
+                logger.info("Application shutdown complete.")
+        except RuntimeError as e:
+            if "still running" in str(e):
+                logger.warning(f"Updater still running during shutdown, this is expected: {e}")
+            else:
+                logger.exception("RuntimeError during app.shutdown()")
         except Exception:
             logger.exception("Error during app.shutdown()")
 

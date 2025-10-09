@@ -349,7 +349,7 @@ class GracefulShutdownManager:
                     # 3) Wait for the updater to finish by checking for a short period.
                     # Some PTB builds set updater.running or updater.is_running; poll for that.
                     waited = 0.0
-                    poll_interval = 0.05
+                    poll_interval = 0.1
                     max_wait = wait_timeout
                     while waited < max_wait:
                         running = False
@@ -358,9 +358,13 @@ class GracefulShutdownManager:
                         except Exception:
                             running = False
                         if not running:
+                            logger.info(f"Updater stopped after {waited:.2f}s")
                             break
                         await asyncio.sleep(poll_interval)
                         waited += poll_interval
+                    
+                    if running:
+                        logger.warning(f"Updater still running after {max_wait}s wait")
 
                 # 4) If polling tasks still exist (polling_action_cb), cancel them directly.
                 # Search all tasks and cancel those that look like the Updater polling coroutine.
