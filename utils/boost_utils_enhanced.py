@@ -234,69 +234,59 @@ class EnhancedBoostService:
         provider,
         payload: BoostJobPayload
     ) -> bool:
-        """Execute boost with phased timing, retry logic and circuit breaker."""
+        """Execute boost with phased timing, retry logic and circuit breaker.
         
-        # Implement phased boosting: split into two batches with 30-minute delays
-        first_half_views = payload.views // 2
-        first_half_likes = payload.likes // 2
-        remaining_views = payload.views - first_half_views
-        remaining_likes = payload.likes - first_half_likes
+        Strategy: Send views in 1k batches every 30 mins, send all likes with the last batch.
+        """
         
-        # First 30-minute delay before first batch
-        if first_half_views > 0 or first_half_likes > 0:
+        # Calculate batches: 1k views per batch
+        VIEWS_PER_BATCH = 1000
+        total_views = payload.views
+        total_likes = payload.likes
+        
+        # Calculate number of batches needed for views
+        num_view_batches = (total_views + VIEWS_PER_BATCH - 1) // VIEWS_PER_BATCH  # Ceiling division
+        if num_view_batches == 0:
+            num_view_batches = 1  # At least one batch if there are likes to send
+        
+        # Send views in batches
+        views_sent = 0
+        for batch_num in range(num_view_batches):
+            # Wait 30 minutes before each batch
             logger.info(
-                f"[BoostManager] Waiting {FIRST_BOOST_INTERVAL_SECONDS//60}m before first batch for job {job.job_id}",
+                f"[BoostManager] Waiting {FIRST_BOOST_INTERVAL_SECONDS//60}m before batch {batch_num + 1}/{num_view_batches} for job {job.job_id}",
                 extra={'job_id': job.job_id, 'correlation_id': job.correlation_id}
             )
             await asyncio.sleep(FIRST_BOOST_INTERVAL_SECONDS)
             
-            # Send first half of views
-            if first_half_views > 0:
-                if not await self._send_boost_with_retries(
-                    job, provider, provider.view_service_id, 
-                    payload.link, first_half_views, "views (first half)"
-                ):
-                    return False
+            # Calculate views for this batch
+            views_remaining = total_views - views_sent
+            batch_views = min(VIEWS_PER_BATCH, views_remaining)
             
-            # Send first half of likes
-            if first_half_likes > 0:
-                if not await self._send_boost_with_retries(
-                    job, provider, provider.like_service_id,
-                    payload.link, first_half_likes, "likes (first half)"
-                ):
-                    return False
+            is_last_batch = (batch_num == num_view_batches - 1)
             
-            logger.info(
-                f"[BoostManager] First batch sent: {first_half_views} views, {first_half_likes} likes for job {job.job_id}",
-                extra={'job_id': job.job_id}
-            )
-        
-        # Second 30-minute delay before second batch
-        if remaining_views > 0 or remaining_likes > 0:
-            logger.info(
-                f"[BoostManager] Waiting {SECOND_BOOST_INTERVAL_SECONDS//60}m before second batch for job {job.job_id}",
-                extra={'job_id': job.job_id}
-            )
-            await asyncio.sleep(SECOND_BOOST_INTERVAL_SECONDS)
-            
-            # Send remaining views
-            if remaining_views > 0:
+            # Send views for this batch
+            if batch_views > 0:
+                batch_label = f"views (batch {batch_num + 1}/{num_view_batches})"
                 if not await self._send_boost_with_retries(
                     job, provider, provider.view_service_id,
-                    payload.link, remaining_views, "views (second half)"
+                    payload.link, batch_views, batch_label
                 ):
                     return False
+                views_sent += batch_views
             
-            # Send remaining likes
-            if remaining_likes > 0:
+            # Send all likes with the last batch of views
+            if is_last_batch and total_likes > 0:
                 if not await self._send_boost_with_retries(
                     job, provider, provider.like_service_id,
-                    payload.link, remaining_likes, "likes (second half)"
+                    payload.link, total_likes, "likes (with final batch)"
                 ):
                     return False
             
             logger.info(
-                f"[BoostManager] Second batch sent: {remaining_views} views, {remaining_likes} likes for job {job.job_id}",
+                f"[BoostManager] Batch {batch_num + 1} sent: {batch_views} views" + 
+                (f", {total_likes} likes" if is_last_batch and total_likes > 0 else "") +
+                f" for job {job.job_id}",
                 extra={'job_id': job.job_id}
             )
         
@@ -459,8 +449,16 @@ class EnhancedBoostService:
         """
         Classify Plugsmm-specific errors.
         """
-        if not error_msg:
-            error_msg = "Unknown error"
+        # Handle case where error_msg is None, empty, or just whitespace
+        if not error_msg or not error_msg.strip():
+            # Try to extract error from raw_response
+            if raw_response and isinstance(raw_response, dict):
+                if 'error' in raw_response:
+                    error_msg = str(raw_response['error'])
+                else:
+                    error_msg = f"Unknown error: {raw_response}"
+            else:
+                error_msg = "Unknown error - no error message provided"
         
         error_lower = error_msg.lower()
         
