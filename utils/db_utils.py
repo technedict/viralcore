@@ -171,19 +171,29 @@ def init_groups_db() -> None:
     print("Groups DB initialized successfully.")
 
 def init_custom_db() -> None:
-    """Set up custom_plans table for user-defined engagement goals."""
+    """Set up custom_plans table for user-defined engagement goals (supports multiple plans per user)."""
     with get_connection(CUSTOM_DB_FILE) as conn:
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS custom_plans (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE NOT NULL,
+                user_id INTEGER NOT NULL,
+                plan_name TEXT NOT NULL,
                 target_likes INTEGER DEFAULT 0,
                 target_retweets INTEGER DEFAULT 0,
                 target_comments INTEGER DEFAULT 0,
-                target_views INTEGER DEFAULT 0
+                target_views INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id, plan_name)
             );
         ''')
+        
+        # Add indexes for better performance
+        c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_user_id ON custom_plans(user_id)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_active ON custom_plans(user_id, is_active)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_name ON custom_plans(user_id, plan_name)')
     print("Custom DB initialized successfully.")
 
 # --- User & Affiliate Management ---
@@ -772,36 +782,252 @@ def decrement_tg_rpost(user_id: int) -> Optional[int]:
         conn.commit()
         return new_rposts
 
-# --- Custom Plans ---
+# --- Custom Plans (Multiple Plans Support) ---
 
-def get_custom_plan(user_id: int) -> Tuple[int, int, int, int]:
-    """Fetch a user's custom engagement targets. Returns (0,0,0,0) if no plan exists."""
+def get_custom_plan(user_id: int, plan_name: str = None) -> Tuple[int, int, int, int]:
+    """
+    Fetch a user's custom engagement targets for a specific plan or their default active plan.
+    Returns (0,0,0,0) if no plan exists.
+    
+    Args:
+        user_id: User ID
+        plan_name: Specific plan name, or None to get the first active plan
+    """
     with get_connection(CUSTOM_DB_FILE) as conn:
         c = conn.cursor()
-        c.execute(
-            """
-            SELECT target_likes, target_retweets, target_comments, target_views
-              FROM custom_plans
-             WHERE user_id = ?
-            """,
-            (user_id,)
-        )
+        
+        if plan_name:
+            # Get specific plan by name
+            c.execute(
+                """
+                SELECT target_likes, target_retweets, target_comments, target_views
+                FROM custom_plans
+                WHERE user_id = ? AND plan_name = ? AND is_active = 1
+                """,
+                (user_id, plan_name)
+            )
+        else:
+            # Get first active plan (for backward compatibility)
+            c.execute(
+                """
+                SELECT target_likes, target_retweets, target_comments, target_views
+                FROM custom_plans
+                WHERE user_id = ? AND is_active = 1
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (user_id,)
+            )
+        
         row = c.fetchone()
         return tuple(row) if row else (0, 0, 0, 0)
 
-def set_custom_plan(user_id: int, likes: int, retweets: int, comments: int, views: int) -> None:
-    """Inserts or updates a user's custom engagement targets."""
+def get_user_custom_plans(user_id: int, active_only: bool = True) -> List[Dict[str, Any]]:
+    """
+    Get all custom plans for a user.
+    
+    Args:
+        user_id: User ID
+        active_only: If True, only return active plans
+    
+    Returns:
+        List of custom plan dictionaries
+    """
     with get_connection(CUSTOM_DB_FILE) as conn:
         c = conn.cursor()
+        
+        query = """
+            SELECT id, plan_name, target_likes, target_retweets, target_comments, target_views, 
+                   is_active, created_at, updated_at
+            FROM custom_plans
+            WHERE user_id = ?
+        """
+        params = [user_id]
+        
+        if active_only:
+            query += " AND is_active = 1"
+            
+        query += " ORDER BY created_at DESC"
+        
+        c.execute(query, params)
+        
+        plans = []
+        for row in c.fetchall():
+            plans.append({
+                'id': row['id'],
+                'plan_name': row['plan_name'],
+                'target_likes': row['target_likes'],
+                'target_retweets': row['target_retweets'],
+                'target_comments': row['target_comments'],
+                'target_views': row['target_views'],
+                'is_active': bool(row['is_active']),
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at']
+            })
+        
+        return plans
+
+def create_custom_plan(user_id: int, plan_name: str, likes: int, retweets: int, comments: int, views: int) -> bool:
+    """
+    Create a new custom plan for a user.
+    
+    Args:
+        user_id: User ID
+        plan_name: Name for the custom plan
+        likes: Target likes
+        retweets: Target retweets
+        comments: Target comments
+        views: Target views
+    
+    Returns:
+        True if successful, False if plan name already exists
+    """
+    from datetime import datetime
+    
+    with get_connection(CUSTOM_DB_FILE) as conn:
+        c = conn.cursor()
+        
+        # Check if plan name already exists for this user
+        c.execute(
+            "SELECT id FROM custom_plans WHERE user_id = ? AND plan_name = ?",
+            (user_id, plan_name)
+        )
+        if c.fetchone():
+            return False  # Plan name already exists
+        
+        current_time = datetime.utcnow().isoformat()
+        
         c.execute(
             """
-            INSERT OR REPLACE INTO custom_plans (user_id, target_likes, target_retweets, target_comments, target_views)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO custom_plans 
+            (user_id, plan_name, target_likes, target_retweets, target_comments, target_views, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
             """,
-            (user_id, likes, retweets, comments, views)
+            (user_id, plan_name, likes, retweets, comments, views, current_time, current_time)
         )
         conn.commit()
-    print(f"Custom plan set for user {user_id}.")
+        
+    print(f"Custom plan '{plan_name}' created for user {user_id}.")
+    return True
+
+def update_custom_plan(user_id: int, plan_name: str, likes: int = None, retweets: int = None, 
+                      comments: int = None, views: int = None, is_active: bool = None) -> bool:
+    """
+    Update an existing custom plan.
+    
+    Args:
+        user_id: User ID
+        plan_name: Plan name to update
+        likes: New target likes (optional)
+        retweets: New target retweets (optional)
+        comments: New target comments (optional)
+        views: New target views (optional)
+        is_active: New active status (optional)
+    
+    Returns:
+        True if successful, False if plan doesn't exist
+    """
+    from datetime import datetime
+    
+    with get_connection(CUSTOM_DB_FILE) as conn:
+        c = conn.cursor()
+        
+        # Check if plan exists
+        c.execute(
+            "SELECT id FROM custom_plans WHERE user_id = ? AND plan_name = ?",
+            (user_id, plan_name)
+        )
+        if not c.fetchone():
+            return False  # Plan doesn't exist
+        
+        # Build update query dynamically
+        updates = []
+        params = []
+        
+        if likes is not None:
+            updates.append("target_likes = ?")
+            params.append(likes)
+        if retweets is not None:
+            updates.append("target_retweets = ?")
+            params.append(retweets)
+        if comments is not None:
+            updates.append("target_comments = ?")
+            params.append(comments)
+        if views is not None:
+            updates.append("target_views = ?")
+            params.append(views)
+        if is_active is not None:
+            updates.append("is_active = ?")
+            params.append(1 if is_active else 0)
+        
+        if updates:
+            updates.append("updated_at = ?")
+            params.append(datetime.utcnow().isoformat())
+            
+            params.extend([user_id, plan_name])
+            
+            query = f"UPDATE custom_plans SET {', '.join(updates)} WHERE user_id = ? AND plan_name = ?"
+            c.execute(query, params)
+            conn.commit()
+        
+    print(f"Custom plan '{plan_name}' updated for user {user_id}.")
+    return True
+
+def delete_custom_plan(user_id: int, plan_name: str) -> bool:
+    """
+    Delete a custom plan.
+    
+    Args:
+        user_id: User ID
+        plan_name: Plan name to delete
+    
+    Returns:
+        True if successful, False if plan doesn't exist
+    """
+    with get_connection(CUSTOM_DB_FILE) as conn:
+        c = conn.cursor()
+        
+        result = c.execute(
+            "DELETE FROM custom_plans WHERE user_id = ? AND plan_name = ?",
+            (user_id, plan_name)
+        )
+        
+        success = result.rowcount > 0
+        if success:
+            conn.commit()
+            print(f"Custom plan '{plan_name}' deleted for user {user_id}.")
+        
+        return success
+
+def set_custom_plan(user_id: int, likes: int, retweets: int, comments: int, views: int, plan_name: str = "Default Plan") -> None:
+    """
+    Legacy function for backward compatibility. Creates or updates a custom plan.
+    
+    Args:
+        user_id: User ID
+        likes: Target likes
+        retweets: Target retweets  
+        comments: Target comments
+        views: Target views
+        plan_name: Plan name (defaults to "Default Plan")
+    """
+    from datetime import datetime
+    
+    with get_connection(CUSTOM_DB_FILE) as conn:
+        c = conn.cursor()
+        
+        current_time = datetime.utcnow().isoformat()
+        
+        c.execute(
+            """
+            INSERT OR REPLACE INTO custom_plans 
+            (user_id, plan_name, target_likes, target_retweets, target_comments, target_views, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+            """,
+            (user_id, plan_name, likes, retweets, comments, views, current_time, current_time)
+        )
+        conn.commit()
+    print(f"Custom plan '{plan_name}' set for user {user_id}.")
 
 # --- Transaction Processing ---
 

@@ -94,7 +94,7 @@ async def verify_request_payload():
     payload = {
         "key": "test_key",
         "action": "add",
-        "service": 7750,
+        "service": 6073,
         "link": "https://twitter.com/example/status/123",
         "quantity": 1000
     }
@@ -107,7 +107,7 @@ async def verify_request_payload():
     expected_parts = [
         "key=test_key",
         "action=add",
-        "service=7750",
+        "service=6073",
         "link=https%3A%2F%2Ftwitter.com%2Fexample%2Fstatus%2F123",
         "quantity=1000"
     ]

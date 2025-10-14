@@ -148,7 +148,7 @@ Your system currently uses hardcoded service IDs in `utils/boost_provider_utils.
 ```python
 PROVIDERS = {
     "smmflare": ProviderConfig(like_service_id=8646, view_service_id=8381),
-    "plugsmms": ProviderConfig(like_service_id=11023, view_service_id=7750),
+    "plugsmms": ProviderConfig(like_service_id=11023, view_service_id=6073),
     "smmstone": ProviderConfig(like_service_id=6662, view_service_id=5480)
 }
 ```

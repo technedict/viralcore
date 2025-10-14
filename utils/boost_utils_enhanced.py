@@ -20,6 +20,7 @@ from utils.notification import get_group_id_from_db, TARGET_NOTIFICATION_GROUP_I
 from utils.logging import get_logger, correlation_context, log_provider_error, generate_correlation_id
 from utils.messaging import render_markdown_v2, safe_send, TEMPLATES
 from utils.job_system import job_system, Job, JobStatus, JobType, BoostJobPayload
+from utils.boosting_service_manager import get_boosting_service_manager, ServiceType
 
 logger = get_logger(__name__)
 
@@ -106,6 +107,28 @@ class EnhancedBoostService:
         self.base_delay = 1.0  # Base delay for exponential backoff
         self.max_delay = 60.0  # Maximum delay
         self.jitter_max = 0.1  # Maximum jitter
+    
+    def _get_provider_service_id(self, provider, service_type: ServiceType) -> Optional[int]:
+        """Get provider service ID from database, fallback to hardcoded value."""
+        try:
+            service_manager = get_boosting_service_manager()
+            db_service_id = service_manager.get_provider_service_id(service_type, provider.name)
+            
+            if db_service_id is not None:
+                logger.debug(f"Using database service ID {db_service_id} for {provider.name} {service_type.value}")
+                return db_service_id
+            else:
+                # Fallback to hardcoded value
+                fallback_id = (provider.view_service_id if service_type == ServiceType.VIEWS 
+                             else provider.like_service_id)
+                logger.warning(f"No database service ID found for {provider.name} {service_type.value}, using fallback {fallback_id}")
+                return fallback_id
+        except Exception as e:
+            # Fallback to hardcoded value on any error
+            fallback_id = (provider.view_service_id if service_type == ServiceType.VIEWS 
+                         else provider.like_service_id)
+            logger.error(f"Error getting database service ID for {provider.name} {service_type.value}: {e}, using fallback {fallback_id}")
+            return fallback_id
     
     async def request_boost(
         self,
@@ -268,8 +291,9 @@ class EnhancedBoostService:
             # Send views for this batch
             if batch_views > 0:
                 batch_label = f"views (batch {batch_num + 1}/{num_view_batches})"
+                view_service_id = self._get_provider_service_id(provider, ServiceType.VIEWS)
                 if not await self._send_boost_with_retries(
-                    job, provider, provider.view_service_id,
+                    job, provider, view_service_id,
                     payload.link, batch_views, batch_label
                 ):
                     return False
@@ -277,8 +301,9 @@ class EnhancedBoostService:
             
             # Send all likes with the last batch of views
             if is_last_batch and total_likes > 0:
+                like_service_id = self._get_provider_service_id(provider, ServiceType.LIKES)
                 if not await self._send_boost_with_retries(
-                    job, provider, provider.like_service_id,
+                    job, provider, like_service_id,
                     payload.link, total_likes, "likes (with final batch)"
                 ):
                     return False

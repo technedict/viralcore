@@ -424,8 +424,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Tier 3 Engagement", callback_data="x_tier_t3")],
             [InlineKeyboardButton("Tier 4 Engagement", callback_data="x_tier_t4")],
             [InlineKeyboardButton("Tier 5 Engagement", callback_data="x_tier_t5")], # Corrected to t5
-            # "Custom" will lead to contact support as per your example, or a custom order flow
-            [InlineKeyboardButton("Custom", callback_data="custom_order")],
+            # Custom plans options
+            [InlineKeyboardButton("🎯 My Custom Plans", callback_data="custom_plans_selection")],
+            [InlineKeyboardButton("📋 View My Plans", callback_data="my_custom_plans")],
+            [InlineKeyboardButton("Custom (Contact Support)", callback_data="custom_order")],
             [InlineKeyboardButton("⬅️ Back", callback_data="x_plans")]
         ]
         current_slide_key = "engagement_plans_x"

@@ -16,6 +16,7 @@ from enum import Enum
 from utils.db_utils import get_connection, DB_FILE
 from utils.logging import get_logger, correlation_context, generate_correlation_id
 from utils.boost_provider_utils import get_active_provider, ProviderConfig, PROVIDERS
+from utils.boosting_service_manager import get_boosting_service_manager, ServiceType
 
 logger = get_logger(__name__)
 
@@ -37,6 +38,29 @@ class JobType(Enum):
     PROVIDER_SWITCH = "provider_switch"
 
 
+def _get_provider_service_id(provider, service_type: ServiceType) -> int:
+    """Get provider service ID from database, fallback to hardcoded value."""
+    try:
+        service_manager = get_boosting_service_manager()
+        db_service_id = service_manager.get_provider_service_id(service_type, provider.name)
+        
+        if db_service_id is not None:
+            logger.debug(f"Using database service ID {db_service_id} for {provider.name} {service_type.value}")
+            return db_service_id
+        else:
+            # Fallback to hardcoded value
+            fallback_id = (provider.view_service_id if service_type == ServiceType.VIEWS 
+                         else provider.like_service_id)
+            logger.warning(f"No database service ID found for {provider.name} {service_type.value}, using fallback {fallback_id}")
+            return fallback_id
+    except Exception as e:
+        # Fallback to hardcoded value on any error
+        fallback_id = (provider.view_service_id if service_type == ServiceType.VIEWS 
+                     else provider.like_service_id)
+        logger.error(f"Error getting database service ID for {provider.name} {service_type.value}: {e}, using fallback {fallback_id}")
+        return fallback_id
+
+
 @dataclass
 class ProviderSnapshot:
     """Immutable snapshot of provider configuration at job creation time."""
@@ -56,13 +80,17 @@ class ProviderSnapshot:
         # Hash the API key for security (we'll store actual key separately)
         api_key_hash = hashlib.sha256(provider.api_key.encode()).hexdigest()[:16]
         
+        # Get service IDs from database (with fallback to hardcoded values)
+        view_service_id = _get_provider_service_id(provider, ServiceType.VIEWS)
+        like_service_id = _get_provider_service_id(provider, ServiceType.LIKES)
+        
         return cls(
             provider_id=provider.name,
             provider_name=provider.name,
             api_url=provider.api_url,
             api_key_hash=api_key_hash,
-            view_service_id=provider.view_service_id,
-            like_service_id=provider.like_service_id,
+            view_service_id=view_service_id,
+            like_service_id=like_service_id,
             snapshot_timestamp=datetime.utcnow().isoformat()
         )
 
@@ -169,9 +197,9 @@ class JobSystem:
         expected_service_id = None
         
         if service_type == 'view':
-            expected_service_id = provider.view_service_id
+            expected_service_id = _get_provider_service_id(provider, ServiceType.VIEWS)
         elif service_type == 'like':
-            expected_service_id = provider.like_service_id
+            expected_service_id = _get_provider_service_id(provider, ServiceType.LIKES)
         else:
             raise ServiceProviderMismatchError(f"Unknown service type: {service_type}")
         

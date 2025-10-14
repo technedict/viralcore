@@ -106,14 +106,10 @@ def add_posts(payment_id: int, posts_to_add: int) -> None:
 
 
 def add_custom_plan(user_id: int, target_likes: int, target_retweets: int,
-                    target_comments: int, target_views: int) -> None:
+                    target_comments: int, target_views: int, plan_name: str = "Admin Plan") -> bool:
     """Create a custom engagement plan for a user."""
-    with get_connection(CUSTOM_DB_FILE) as conn:
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO custom_plans (user_id, target_likes, target_retweets, target_comments, target_views) VALUES (?, ?, ?, ?, ?)",
-            (user_id, target_likes, target_retweets, target_comments, target_views)
-        )
+    from utils.db_utils import create_custom_plan
+    return create_custom_plan(user_id, plan_name, target_likes, target_retweets, target_comments, target_views)
 
 
 def update_payment(payment_id: int, user_id: int, new_tier: str, new_post: int) -> None:
@@ -168,13 +164,34 @@ def demote_user(user_id: int) -> None:
 
 
 def delete_custom_plan_by_payment(payment_id: int) -> None:
-    """Remove a custom plan when its purchase is deleted."""
+    """
+    Remove custom plans when a purchase is deleted.
+    Note: With multiple plans support, this function is deprecated.
+    Consider using delete_custom_plan() with specific plan name instead.
+    """
+    # For backward compatibility, we'll keep this but make it safer
+    # Only delete if user has exactly one custom plan (to avoid accidentally deleting multiple plans)
     with get_connection(CUSTOM_DB_FILE) as conn:
         c = conn.cursor()
-        c.execute(
-            "DELETE FROM custom_plans WHERE user_id = (SELECT user_id FROM purchases WHERE id = ?)",
-            (payment_id,)
-        )
+        
+        # Get user_id from payment
+        c.execute("SELECT user_id FROM purchases WHERE id = ?", (payment_id,))
+        result = c.fetchone()
+        if not result:
+            return
+            
+        user_id = result[0]
+        
+        # Count user's custom plans
+        c.execute("SELECT COUNT(*) FROM custom_plans WHERE user_id = ?", (user_id,))
+        plan_count = c.fetchone()[0]
+        
+        # Only delete if user has exactly one plan (safer approach)
+        if plan_count == 1:
+            c.execute("DELETE FROM custom_plans WHERE user_id = ?", (user_id,))
+            print(f"Deleted single custom plan for user {user_id} due to payment {payment_id} deletion.")
+        else:
+            print(f"User {user_id} has {plan_count} custom plans. Manual deletion required for specific plans.")
 
 
 def delete_payment(payment_id: int) -> None:

@@ -158,7 +158,7 @@ Previously, service IDs for likes/views were hardcoded in `boost_provider_utils.
 ```python
 PROVIDERS = {
     "smmflare": ProviderConfig(like_service_id=8646, view_service_id=8381),
-    "plugsmms": ProviderConfig(like_service_id=11023, view_service_id=7750),
+    "plugsmms": ProviderConfig(like_service_id=11023, view_service_id=6073),
     "smmstone": ProviderConfig(like_service_id=6662, view_service_id=5480)
 }
 ```
@@ -314,7 +314,7 @@ mappings = service_manager.get_current_provider_mappings_summary()
 # Returns:
 # {
 #   "likes": {"smmflare": 8646, "plugsmms": 11023, "smmstone": 6662},
-#   "views": {"smmflare": 8381, "plugsmms": 7750, "smmstone": 5480}
+#   "views": {"smmflare": 8381, "plugsmms": 6073, "smmstone": 5480}
 # }
 ```
 

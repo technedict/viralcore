@@ -318,7 +318,16 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
 
     # Compute targets
     if tier == "ct":
-        t_l, t_rt, t_cm, t_vw = get_custom_plan(user_id)
+        # Check if user has selected a specific custom plan
+        selected_plan = context.user_data.get("selected_custom_plan")
+        t_l, t_rt, t_cm, t_vw = get_custom_plan(user_id, selected_plan)
+        
+        # If no custom plan targets found, prompt user to select a plan
+        if (t_l, t_rt, t_cm, t_vw) == (0, 0, 0, 0):
+            # Import here to avoid circular imports
+            from handlers.custom_plans_handlers import show_custom_plans_selection
+            await show_custom_plans_selection(update, context)
+            return
     else:
         metrics_map = {
             "t1": (30, 10, 5, 2000),

@@ -561,7 +561,7 @@ class PaymentHandler:
     
     def _check_bsc(self, tx_hash: str, wallet: str, expected_amount_usd: float, now: int, max_age: int, expected_token: Optional[str], token_decimals: int = 18) -> Dict[str, Any]:
         """Check transaction on Binance Smart Chain (BSC)."""
-        url = "https://api.bscscan.com/api"
+        url = "https://api.etherscan.io/v2/api?chainid=56"
         
         # Normalize wallet address for comparison
         wallet_normalized = self._normalize_address(wallet, "bnb")

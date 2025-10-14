@@ -213,7 +213,7 @@ def apply_boosting_service_providers_migration():
                 # Insert current provider mappings from boost_provider_utils.py
                 providers = [
                     ('smmflare', 8646, 8381),  # like_service_id, view_service_id
-                    ('plugsmms', 11023, 7750),
+                    ('plugsmms', 11023, 6073),
                     ('smmstone', 6662, 5480)
                 ]
                 

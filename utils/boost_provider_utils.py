@@ -91,7 +91,7 @@ PROVIDERS: Dict[str, ProviderConfig] = {
         name="plugsmms",
         api_url="https://plugsmmservice.com/api/v2",
         api_key=os.getenv("PLUGSMMS_API_KEY", "MISSING_KEY"),
-        view_service_id=7750, 
+        view_service_id=6073, 
         like_service_id=11023
     ),
     "smmstone": ProviderConfig(

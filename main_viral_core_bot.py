@@ -39,6 +39,7 @@ from handlers.link_submission_handlers import (
 from handlers.raid_balance_handlers import raid, stop_raid, balance, addposts
 from handlers.menu_handlers import menu_handler, handle_withdrawal_approval, handle_replies_approval
 from handlers.admin_handlers import admin_panel_handler
+from handlers.custom_plans_handlers import show_custom_plans_selection, handle_custom_plan_selection, show_my_custom_plans
 from handlers.message_handler import message_router
 from handlers.track_groups_handler import track_groups
 from handlers.link_click_handlers import handle_link_click
@@ -115,6 +116,20 @@ async def main():
     app.add_handler(CallbackQueryHandler(
         tg_account_selection_handler,
         pattern=r"^select_tg_"
+    ))
+    
+    # Custom plans handlers
+    app.add_handler(CallbackQueryHandler(
+        show_custom_plans_selection,
+        pattern=r"^custom_plans_selection$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        handle_custom_plan_selection,
+        pattern=r"^select_custom_plan_"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        show_my_custom_plans,
+        pattern=r"^my_custom_plans$"
     ))
     
     # NEW: Withdrawal management handlers

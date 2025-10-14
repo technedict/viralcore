@@ -13,6 +13,7 @@ from utils.config import APIConfig
 from utils.menu_utils import escape_md
 from utils.boost_provider_utils import get_active_provider, ProviderConfig
 from utils.notification import TARGET_NOTIFICATION_GROUP_ID_FROM_DB, get_group_id_from_db, notify_admin as admin_notify
+from utils.boosting_service_manager import get_boosting_service_manager, ServiceType
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -40,6 +41,30 @@ ACTIVE_ORDER_TIMEOUT_SECONDS = 2 * 60 * 60      # 2 hours
 
 # Initialize Telegram Bot
 bot = Bot(token=APIConfig.TELEGRAM_BOT_TOKEN)
+
+# --- Helper Functions ---
+
+def _get_provider_service_id(provider, service_type: ServiceType) -> int:
+    """Get provider service ID from database, fallback to hardcoded value."""
+    try:
+        service_manager = get_boosting_service_manager()
+        db_service_id = service_manager.get_provider_service_id(service_type, provider.name)
+        
+        if db_service_id is not None:
+            logger.debug(f"Using database service ID {db_service_id} for {provider.name} {service_type.value}")
+            return db_service_id
+        else:
+            # Fallback to hardcoded value
+            fallback_id = (provider.view_service_id if service_type == ServiceType.VIEWS 
+                         else provider.like_service_id)
+            logger.warning(f"No database service ID found for {provider.name} {service_type.value}, using fallback {fallback_id}")
+            return fallback_id
+    except Exception as e:
+        # Fallback to hardcoded value on any error
+        fallback_id = (provider.view_service_id if service_type == ServiceType.VIEWS 
+                     else provider.like_service_id)
+        logger.error(f"Error getting database service ID for {provider.name} {service_type.value}: {e}, using fallback {fallback_id}")
+        return fallback_id
 
 # --- Boost Service API Interactions ---
 
@@ -298,7 +323,9 @@ class BoostManager:
             try:
                 logger.info(f"[BoostManager] Initiating 1-hour phased boost for link: {link}")
                 provider = get_active_provider()
-                logger.debug(f"Provider View Service ID: {provider.view_service_id}, Like Service ID: {provider.like_service_id}")
+                view_service_id = _get_provider_service_id(provider, ServiceType.VIEWS)
+                like_service_id = _get_provider_service_id(provider, ServiceType.LIKES)
+                logger.debug(f"Provider View Service ID: {view_service_id}, Like Service ID: {like_service_id}")
 
                 first_half_views = views // 2
                 first_half_likes = (likes - comments) // 2
@@ -311,9 +338,9 @@ class BoostManager:
 
                     # send both, if present
                     if first_half_views > 0:
-                        await _order_boost(provider.view_service_id, link, first_half_views)
+                        await _order_boost(view_service_id, link, first_half_views)
                     if first_half_likes > 0:
-                        await _order_boost(provider.like_service_id, link, first_half_likes)
+                        await _order_boost(like_service_id, link, first_half_likes)
 
                     logger.info(
                         f"[BoostManager] First batch sent: {first_half_views} views, {first_half_likes} likes for {link}"
@@ -328,13 +355,13 @@ class BoostManager:
                 remaining_likes = max(likes - first_half_likes, 0)
 
                 if remaining_views > 0:
-                    await _order_boost(provider.view_service_id, link, remaining_views)
+                    await _order_boost(view_service_id, link, remaining_views)
                     logger.info(f"[BoostManager] Remaining {remaining_views} views sent for {link}.")
                 else:
                     logger.info(f"[BoostManager] No remaining views to send for {link} (quantity 0).")
 
                 if remaining_likes > 0:
-                    await _order_boost(provider.like_service_id, link, remaining_likes)
+                    await _order_boost(like_service_id, link, remaining_likes)
                     logger.info(f"[BoostManager] {remaining_likes} likes sent for {link}.")
                 else:
                     logger.info(f"[BoostManager] No likes to send for {link} (quantity 0).")

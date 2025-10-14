@@ -129,16 +129,31 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
             )
         return
 
-    # 5) Add custom plan: "UserID, Likes, Retweets, Comments, Views"
+    # 5) Add custom plan: "UserID, PlanName, Likes, Retweets, Comments, Views"
     if context.user_data.pop("awaiting_add_custom_plan", None):
         try:
-            uid, likes, rts, cmts, views = [int(p.strip()) for p in text.split(",")]
-            add_custom_plan(uid, likes, rts, cmts, views)
-            await update.message.reply_text(f"✅ Custom plan set for user {uid}.")
+            parts = [p.strip() for p in text.split(",")]
+            if len(parts) == 5:
+                # Old format: UserID, Likes, Retweets, Comments, Views
+                uid, likes, rts, cmts, views = [int(p) for p in parts]
+                plan_name = "Admin Plan"
+            elif len(parts) == 6:
+                # New format: UserID, PlanName, Likes, Retweets, Comments, Views
+                uid = int(parts[0])
+                plan_name = parts[1]
+                likes, rts, cmts, views = [int(p) for p in parts[2:]]
+            else:
+                raise ValueError("Invalid number of parameters")
+            
+            success = add_custom_plan(uid, likes, rts, cmts, views, plan_name)
+            if success:
+                await update.message.reply_text(f"✅ Custom plan '{plan_name}' created for user {uid}.")
+            else:
+                await update.message.reply_text(f"❌ Plan name '{plan_name}' already exists for user {uid}.")
         except Exception as e:
             logger.exception("Error adding custom plan")
             await update.message.reply_text(
-                "❌ Invalid format. Use: `UserID, Likes, Retweets, Comments, Views`"
+                "❌ Invalid format. Use: `UserID, PlanName, Likes, Retweets, Comments, Views` or `UserID, Likes, Retweets, Comments, Views`"
             )
         return
 
