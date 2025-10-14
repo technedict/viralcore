@@ -13,7 +13,7 @@ from datetime import datetime
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.db_utils import get_connection, DB_FILE
+from utils.db_utils import get_connection, DB_FILE, CUSTOM_DB_FILE
 from utils.balance_operations import init_operations_ledger
 
 def apply_balance_operations_migration():
@@ -322,6 +322,20 @@ def check_migration_status():
         # Check for withdrawal errors table
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='withdrawal_errors'")
         withdrawal_errors_exists = c.fetchone() is not None
+    
+    # Check custom plans max_posts column
+    custom_plans_max_posts_exists = False
+    try:
+        with get_connection(CUSTOM_DB_FILE) as custom_conn:
+            c = custom_conn.cursor()
+            c.execute("PRAGMA table_info(custom_plans)")
+            columns = [col[1] for col in c.fetchall()]
+            custom_plans_max_posts_exists = 'max_posts' in columns
+    except Exception:
+        custom_plans_max_posts_exists = False
+    
+    with get_connection(DB_FILE) as conn:
+        c = conn.cursor()
         
         # Check for users table columns
         c.execute("PRAGMA table_info(users)")
@@ -342,6 +356,7 @@ def check_migration_status():
         print(f"  Withdrawals System:            {'✅ Applied' if withdrawals_exists else '❌ Not Applied'}")
         print(f"  Withdrawal Errors Tracking:    {'✅ Applied' if withdrawal_errors_exists else '❌ Not Applied'}")
         print(f"  Boosting Service Providers:    {'✅ Applied' if boosting_providers_exists else '❌ Not Applied'}")
+        print(f"  Custom Plans Max Posts:        {'✅ Applied' if custom_plans_max_posts_exists else '❌ Not Applied'}")
         
         return {
             'db_centralized': db_centralized,
@@ -351,8 +366,38 @@ def check_migration_status():
             'affiliate_balance': has_affiliate_balance,
             'withdrawals': withdrawals_exists,
             'withdrawal_errors': withdrawal_errors_exists,
-            'boosting_providers': boosting_providers_exists
+            'boosting_providers': boosting_providers_exists,
+            'custom_plans_max_posts': custom_plans_max_posts_exists
         }
+
+def apply_custom_plans_max_posts_migration():
+    """Apply custom plans max_posts column migration."""
+    print("Applying custom plans max_posts migration...")
+    
+    try:
+        with get_connection(CUSTOM_DB_FILE) as conn:
+            c = conn.cursor()
+            
+            # Check if max_posts column already exists
+            c.execute("PRAGMA table_info(custom_plans)")
+            columns = [col[1] for col in c.fetchall()]
+            
+            if 'max_posts' not in columns:
+                # Add max_posts column with default value of 50
+                c.execute("ALTER TABLE custom_plans ADD COLUMN max_posts INTEGER DEFAULT 50")
+                
+                # Update existing plans to have the default value
+                c.execute("UPDATE custom_plans SET max_posts = 50 WHERE max_posts IS NULL")
+                
+                conn.commit()
+                print("✅ Added max_posts column to custom_plans table")
+            else:
+                print("✅ max_posts column already exists in custom_plans table")
+            
+        return True
+    except Exception as e:
+        print(f"❌ Failed to apply custom plans max_posts migration: {e}")
+        return False
 
 def apply_all_migrations():
     """Apply all pending migrations."""
@@ -400,6 +445,12 @@ def apply_all_migrations():
     
     # Apply boosting service providers migration
     if apply_boosting_service_providers_migration():
+        migrations_applied += 1
+    else:
+        migrations_failed += 1
+    
+    # Apply custom plans max_posts migration
+    if apply_custom_plans_max_posts_migration():
         migrations_applied += 1
     else:
         migrations_failed += 1
@@ -480,6 +531,8 @@ def main():
         pending_migrations.append('Withdrawals System')
     if not status['boosting_providers']:
         pending_migrations.append('Boosting Service Providers')
+    if not status['custom_plans_max_posts']:
+        pending_migrations.append('Custom Plans Max Posts')
     
     if pending_migrations:
         print(f"\nPending migrations: {', '.join(pending_migrations)}")
