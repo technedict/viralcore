@@ -423,7 +423,7 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif data == "admin_add_custom_plan":
         await _send_admin_prompt(
             update, context, "awaiting_add_custom_plan",
-            "📋 *Add Custom Plan*\nFormat: `UserID, PlanName, Likes, Retweets, Comments, Views`\nOr legacy format: `UserID, Likes, Retweets, Comments, Views`",
+            "📋 *Add Custom Plan*\nFormat: `UserID, PlanName, Likes, Retweets, Comments, Views, MaxPosts`\nOr without MaxPosts (defaults to 50): `UserID, PlanName, Likes, Retweets, Comments, Views`\nOr legacy format: `UserID, Likes, Retweets, Comments, Views`",
             "admin_content_menu" # Back to content menu
         )
         logger.info(f"Admin {query.from_user.id} initiated 'add custom plan'.")

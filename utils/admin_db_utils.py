@@ -106,10 +106,10 @@ def add_posts(payment_id: int, posts_to_add: int) -> None:
 
 
 def add_custom_plan(user_id: int, target_likes: int, target_retweets: int,
-                    target_comments: int, target_views: int, plan_name: str = "Admin Plan") -> bool:
+                    target_comments: int, target_views: int, plan_name: str = "Admin Plan", max_posts: int = 50) -> bool:
     """Create a custom engagement plan for a user."""
     from utils.db_utils import create_custom_plan
-    return create_custom_plan(user_id, plan_name, target_likes, target_retweets, target_comments, target_views)
+    return create_custom_plan(user_id, plan_name, target_likes, target_retweets, target_comments, target_views, max_posts)
 
 
 def update_payment(payment_id: int, user_id: int, new_tier: str, new_post: int) -> None:

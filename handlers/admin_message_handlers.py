@@ -129,7 +129,7 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
             )
         return
 
-    # 5) Add custom plan: "UserID, PlanName, Likes, Retweets, Comments, Views"
+    # 5) Add custom plan: "UserID, PlanName, Likes, Retweets, Comments, Views, MaxPosts"
     if context.user_data.pop("awaiting_add_custom_plan", None):
         try:
             parts = [p.strip() for p in text.split(",")]
@@ -137,17 +137,24 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 # Old format: UserID, Likes, Retweets, Comments, Views
                 uid, likes, rts, cmts, views = [int(p) for p in parts]
                 plan_name = "Admin Plan"
+                max_posts = 50  # Default
             elif len(parts) == 6:
-                # New format: UserID, PlanName, Likes, Retweets, Comments, Views
+                # Format: UserID, PlanName, Likes, Retweets, Comments, Views
                 uid = int(parts[0])
                 plan_name = parts[1]
                 likes, rts, cmts, views = [int(p) for p in parts[2:]]
+                max_posts = 50  # Default
+            elif len(parts) == 7:
+                # Full format: UserID, PlanName, Likes, Retweets, Comments, Views, MaxPosts
+                uid = int(parts[0])
+                plan_name = parts[1]
+                likes, rts, cmts, views, max_posts = [int(p) for p in parts[2:]]
             else:
                 raise ValueError("Invalid number of parameters")
             
-            success = add_custom_plan(uid, likes, rts, cmts, views, plan_name)
+            success = add_custom_plan(uid, likes, rts, cmts, views, plan_name, max_posts)
             if success:
-                await update.message.reply_text(f"✅ Custom plan '{plan_name}' created for user {uid}.")
+                await update.message.reply_text(f"✅ Custom plan '{plan_name}' created for user {uid} with {max_posts} posts.")
             else:
                 await update.message.reply_text(f"❌ Plan name '{plan_name}' already exists for user {uid}.")
         except Exception as e:

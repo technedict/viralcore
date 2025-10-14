@@ -867,7 +867,7 @@ def get_user_custom_plans(user_id: int, active_only: bool = True) -> List[Dict[s
         
         return plans
 
-def create_custom_plan(user_id: int, plan_name: str, likes: int, retweets: int, comments: int, views: int) -> bool:
+def create_custom_plan(user_id: int, plan_name: str, likes: int, retweets: int, comments: int, views: int, max_posts: int = 50) -> bool:
     """
     Create a new custom plan for a user.
     
@@ -878,6 +878,7 @@ def create_custom_plan(user_id: int, plan_name: str, likes: int, retweets: int, 
         retweets: Target retweets
         comments: Target comments
         views: Target views
+        max_posts: Maximum number of posts allowed (default: 50)
     
     Returns:
         True if successful, False if plan name already exists
@@ -900,12 +901,41 @@ def create_custom_plan(user_id: int, plan_name: str, likes: int, retweets: int, 
         c.execute(
             """
             INSERT INTO custom_plans 
-            (user_id, plan_name, target_likes, target_retweets, target_comments, target_views, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+            (user_id, plan_name, target_likes, target_retweets, target_comments, target_views, max_posts, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             """,
-            (user_id, plan_name, likes, retweets, comments, views, current_time, current_time)
+            (user_id, plan_name, likes, retweets, comments, views, max_posts, current_time, current_time)
         )
         conn.commit()
+    
+    # Create corresponding purchase record for the custom plan
+    with get_connection(DB_FILE) as conn:
+        c = conn.cursor()
+        
+        # Check if user already has a 'ct' purchase record
+        c.execute("""
+            SELECT COUNT(*) FROM purchases 
+            WHERE user_id = ? AND plan_type = 'ct'
+        """, (user_id,))
+        
+        existing_count = c.fetchone()[0]
+        
+        if existing_count == 0:
+            # Create purchase record for custom plan access using the specified max_posts
+            c.execute("""
+                INSERT INTO purchases 
+                (user_id, plan_type, quantity, amount_paid_usd, payment_method, 
+                 transaction_ref, timestamp, x_username, posts, rposts)
+                VALUES (?, 'ct', ?, 0.0, 'custom_plan', ?, ?, '', ?, ?)
+            """, (
+                user_id,
+                max_posts,
+                f"custom_plan_{user_id}_{plan_name}_{current_time}",
+                current_time,
+                max_posts,
+                max_posts
+            ))
+            conn.commit()
         
     print(f"Custom plan '{plan_name}' created for user {user_id}.")
     return True
