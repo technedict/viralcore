@@ -2,8 +2,14 @@
 # handlers/admin_message_handlers.py
 
 import logging
+import sys
+import os
 from telegram import Update
 from telegram.ext import ContextTypes
+
+# Add parent directory to Python path to access viralmonitor
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from viralmonitor.utils.db import add_post
 from utils.admin_db_utils import (
     add_payment,

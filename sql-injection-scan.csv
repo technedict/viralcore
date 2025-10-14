@@ -1,6 +1,0 @@
-File,Line,Pattern,Severity,Issue,Status
-utils/db_utils.py,Various,c.execute with parameters,INFO,Parameterized queries used,SECURE
-utils/balance_operations.py,Various,c.execute with parameters,INFO,Parameterized queries used,SECURE
-utils/job_system.py,Various,c.execute with parameters,INFO,Parameterized queries used,SECURE
-scripts/reconcile_balances.py,Various,c.execute with parameters,INFO,Parameterized queries used,SECURE
-No SQL injection patterns found,N/A,All execute statements use parameterized queries,INFO,Good security practice,SECURE

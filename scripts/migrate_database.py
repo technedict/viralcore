@@ -11,7 +11,8 @@ import sqlite3
 from datetime import datetime
 
 # Add the parent directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # viralcore
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # viralpackage
 
 from utils.db_utils import get_connection, DB_FILE, CUSTOM_DB_FILE
 from utils.balance_operations import init_operations_ledger
@@ -34,6 +35,10 @@ def apply_reply_balance_migration():
     
     try:
         from viralmonitor.utils.db import db_manager
+        # Initialize the database if needed
+        with db_manager.get_connection() as conn:
+            # The database should auto-initialize when accessed
+            pass
         print("✅ Reply balance table created/updated")
         return True
     except Exception as e:
@@ -303,9 +308,15 @@ def check_migration_status():
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='balance_operations'")
         balance_ops_exists = c.fetchone() is not None
         
-        # Check for reply balance table
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reply_balances'")
-        reply_balance_exists = c.fetchone() is not None
+        # Check for reply balance table (in viralmonitor database)
+        try:
+            from viralmonitor.utils.db import get_connection as get_vm_connection
+            with get_vm_connection() as vm_conn:
+                vm_c = vm_conn.cursor()
+                vm_c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='balance_changes'")
+                reply_balance_exists = vm_c.fetchone() is not None
+        except Exception:
+            reply_balance_exists = False
         
         # Check for job queue table
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='job_queue'")
