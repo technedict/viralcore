@@ -76,6 +76,32 @@ async def handle_custom_plan_selection(update: Update, context: ContextTypes.DEF
     # Store selected plan in context
     context.user_data["selected_custom_plan"] = plan_name
     
+    # Check if there's a pending post submission to continue
+    pending_tweet = context.user_data.get("pending_tweet")
+    selected_x_account = context.user_data.get("selected_x_account")
+    
+    if pending_tweet and selected_x_account:
+        # Continue with the post submission process by calling the X account handler again
+        await query.edit_message_text(
+            f"✅ **Selected Custom Plan: {plan_name}**\n\n"
+            f"📊 **Plan Details:**\n"
+            f"• Target Likes: {selected_plan['target_likes']}\n"
+            f"• Target Retweets: {selected_plan['target_retweets']}\n"
+            f"• Target Comments: {selected_plan['target_comments']}\n"
+            f"• Target Views: {selected_plan['target_views']}\n\n"
+            f"🚀 Processing your post...",
+            parse_mode='Markdown'
+        )
+        
+        # Continue the submission by calling the X account selection handler again
+        from handlers.link_submission_handlers import x_account_selection_handler
+        
+        # Modify the query data to simulate the X account selection
+        query.data = f"select_x_{selected_x_account}"
+        
+        await x_account_selection_handler(update, context)
+        return
+        
     await query.edit_message_text(
         f"✅ **Selected Custom Plan: {plan_name}**\n\n"
         f"📊 **Plan Details:**\n"

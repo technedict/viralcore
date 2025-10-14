@@ -30,7 +30,9 @@ from utils.db_utils import (
     get_custom_plan,
     get_latest_tier_for_x,
     decrement_tg_rpost,
-    get_latest_tg_plan
+    get_latest_tg_plan,
+    get_user_custom_plans,
+    decrement_custom_plan_posts
 )
 from utils.link_utils import create_shortened_link, extract_tweet_id, is_tg_link
 
@@ -249,19 +251,51 @@ async def process_twitter_link(
         "twitter_link": twitter_link,
         "shortened_link": shortened
     }
+    
+    # Clear any previously selected custom plan for fresh selection
+    context.user_data.pop("selected_custom_plan", None)
+    context.user_data.pop("selected_x_account", None)
 
     # Prompt for X account
     raw_accounts = get_x_accounts(user_id)
     accounts = sorted({acc.strip().lower() for acc in raw_accounts if acc.strip()})
     if accounts:
-        keyboard = [
-            [InlineKeyboardButton(f"@{acc.title()}", callback_data=f"select_x_{acc}")]
-            for acc in accounts
-        ]
-        await update.message.reply_text(
-            "Select which X account to use for this post:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        keyboard = []
+        
+        # Add regular tier plan options for each account
+        for acc in accounts:
+            tier, remaining = get_latest_tier_for_x(user_id, acc)
+            if tier and remaining and remaining > 0:
+                # User has active tier plan for this account
+                tier_display = tier.upper()
+                keyboard.append([InlineKeyboardButton(
+                    f"@{acc.title()} ({tier_display} - {remaining} posts left)",
+                    callback_data=f"select_x_{acc}"
+                )])
+        
+        # Add custom plan options for each account
+        custom_plans = get_user_custom_plans(user_id, active_only=True)
+        if custom_plans:
+            for acc in accounts:
+                for plan in custom_plans:
+                    plan_name = plan['plan_name']
+                    # Check if this plan has posts remaining
+                    max_posts = plan.get('max_posts', 0)
+                    if max_posts > 0:  # Only show plans with remaining posts
+                        keyboard.append([InlineKeyboardButton(
+                            f"@{acc.title()} (Custom: {plan_name} - {max_posts} posts left)",
+                            callback_data=f"select_x_{acc}_custom_{plan_name}"
+                        )])
+        
+        if keyboard:
+            await update.message.reply_text(
+                "Select which account and plan to use for this post:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await update.message.reply_text(
+                "❌ You have no active plans with remaining posts. Please purchase a plan first."
+            )
     else:
         context.user_data["awaiting_x_username"] = True
         await update.message.reply_text(
@@ -335,7 +369,21 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     user_id = query.from_user.id
-    acc = query.data.removeprefix("select_x_")
+    selection = query.data.removeprefix("select_x_")
+    
+    # Parse selection - could be "account", "account_custom_planname"
+    if "_custom_" in selection:
+        # Format: account_custom_planname (user selected account + custom plan)
+        parts = selection.split("_custom_", 1)
+        acc = parts[0]
+        plan_name = parts[1]
+        context.user_data["selected_custom_plan"] = plan_name
+        selected_plan_type = "custom"
+    else:
+        # Format: account (regular tier selection)
+        acc = selection
+        context.user_data.pop("selected_custom_plan", None)
+        selected_plan_type = "tier"
 
     # If user is setting their X username
     if context.user_data.pop("awaiting_x_username", None):
@@ -351,25 +399,37 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
         await query.edit_message_text("❌ No pending post found.")
         return
 
-    # Fetch tier & remaining posts
-    tier, _ = get_latest_tier_for_x(user_id, acc)
-    if not tier:
-        await query.edit_message_text(f"No active plan found for @{acc}")
-        return
-
-    # Compute targets
-    if tier == "ct":
-        # Check if user has selected a specific custom plan
-        selected_plan = context.user_data.get("selected_custom_plan")
-        t_l, t_rt, t_cm, t_vw = get_custom_plan(user_id, selected_plan)
+    # Determine which plan type was selected and compute targets accordingly
+    if selected_plan_type == "custom":
+        # User selected a custom plan
+        selected_plan = context.user_data.get("selected_custom_plan") if context.user_data else None
         
-        # If no custom plan targets found, prompt user to select a plan
-        if (t_l, t_rt, t_cm, t_vw) == (0, 0, 0, 0):
-            # Import here to avoid circular imports
-            from handlers.custom_plans_handlers import show_custom_plans_selection
-            await show_custom_plans_selection(update, context)
+        if selected_plan:
+            # Get targets for the selected custom plan
+            t_l, t_rt, t_cm, t_vw = get_custom_plan(user_id, selected_plan)
+            
+            # If the selected plan doesn't exist, show error
+            if (t_l, t_rt, t_cm, t_vw) == (0, 0, 0, 0):
+                await query.edit_message_text(f"❌ Custom plan '{selected_plan}' not found or inactive.")
+                return
+                
+            # Decrement custom plan usage
+            if not decrement_custom_plan_posts(user_id, selected_plan):
+                await query.edit_message_text(f"❌ Custom plan '{selected_plan}' has no remaining posts.")
+                return
+            
+        else:
+            await query.edit_message_text("❌ No custom plan selected.")
             return
+            
     else:
+        # User selected a regular tier plan
+        tier, remaining = get_latest_tier_for_x(user_id, acc)
+        if not tier or not remaining or remaining <= 0:
+            await query.edit_message_text(f"❌ No active tier plan found for @{acc} or no posts remaining.")
+            return
+
+        # Use tier-based metrics
         metrics_map = {
             "t1": (30, 10, 5, 2000),
             "t2": (50, 20, 10, 5000),
@@ -377,14 +437,14 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
             "t4": (100, 40, 20, 10000),
             "t5": (150, 60, 30, 15000),
         }
-        t_l, t_cm, t_rt, t_vw = metrics_map.get(tier, (0, 0, 0, 0))
-
-    # Deduct one post
-    decrement_x_rpost(user_id, acc)
+        t_l, t_rt, t_cm, t_vw = metrics_map.get(tier, (0, 0, 0, 0))
+        
+        # Decrement the tier plan usage
+        decrement_x_rpost(user_id, acc)
 
     # Build the message
     link_md = escape_markdown(pending['twitter_link'], version=2)
-    message_text = generate_x_link_message(user_id, link_md, t_cm, t_rt)
+    message_text = generate_x_link_message(user_id, link_md, str(t_cm), str(t_rt))
 
     # --- priority group logic ---
     total_groups = len(COMMENT_GROUP_IDS)

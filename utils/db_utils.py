@@ -838,7 +838,7 @@ def get_user_custom_plans(user_id: int, active_only: bool = True) -> List[Dict[s
         
         query = """
             SELECT id, plan_name, target_likes, target_retweets, target_comments, target_views, 
-                   is_active, created_at, updated_at
+                   is_active, created_at, updated_at, max_posts
             FROM custom_plans
             WHERE user_id = ?
         """
@@ -862,7 +862,8 @@ def get_user_custom_plans(user_id: int, active_only: bool = True) -> List[Dict[s
                 'target_views': row['target_views'],
                 'is_active': bool(row['is_active']),
                 'created_at': row['created_at'],
-                'updated_at': row['updated_at']
+                'updated_at': row['updated_at'],
+                'max_posts': row['max_posts']
             })
         
         return plans
@@ -1058,6 +1059,59 @@ def set_custom_plan(user_id: int, likes: int, retweets: int, comments: int, view
         )
         conn.commit()
     print(f"Custom plan '{plan_name}' set for user {user_id}.")
+
+def decrement_custom_plan_posts(user_id: int, plan_name: str) -> bool:
+    """
+    Decrement the max_posts for a custom plan by 1.
+    If max_posts reaches 0, the plan is deactivated.
+    
+    Args:
+        user_id: User ID
+        plan_name: Name of the custom plan
+    
+    Returns:
+        True if successfully decremented, False if plan not found or no posts remaining
+    """
+    from datetime import datetime
+    
+    with get_connection(CUSTOM_DB_FILE) as conn:
+        c = conn.cursor()
+        
+        # Get current max_posts
+        c.execute(
+            "SELECT max_posts FROM custom_plans WHERE user_id = ? AND plan_name = ? AND is_active = 1",
+            (user_id, plan_name)
+        )
+        row = c.fetchone()
+        
+        if not row or row['max_posts'] <= 0:
+            return False  # Plan not found or no posts remaining
+        
+        new_posts = row['max_posts'] - 1
+        
+        if new_posts <= 0:
+            # Deactivate the plan
+            c.execute(
+                """
+                UPDATE custom_plans 
+                SET max_posts = 0, is_active = 0, updated_at = ? 
+                WHERE user_id = ? AND plan_name = ?
+                """,
+                (datetime.utcnow().isoformat(), user_id, plan_name)
+            )
+        else:
+            # Just decrement
+            c.execute(
+                """
+                UPDATE custom_plans 
+                SET max_posts = ?, updated_at = ? 
+                WHERE user_id = ? AND plan_name = ?
+                """,
+                (new_posts, datetime.utcnow().isoformat(), user_id, plan_name)
+            )
+        
+        conn.commit()
+        return True
 
 # --- Transaction Processing ---
 
