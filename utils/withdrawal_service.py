@@ -372,40 +372,62 @@ class WithdrawalService:
                             return False
                         
                     elif balance_type == "reply":
-
-                        
-                        # Use viralmonitor db_path if available, otherwise use main DB
-
-                        
-                        reply_db_path = db_path if db_path else DB_FILE
-
-                        
-                        with get_connection(reply_db_path) as wconn:
-                            try:
-                                wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
-                                
-                                # Get withdrawal with row lock (SQLite compatible)
-                                d = wconn.cursor()
-                        
-                                # Atomic update: only succeed if balance is sufficient
-                                result = d.execute("""
-                                    UPDATE balance_changes 
-                                    SET change_amount = change_amount - ? 
-                                    WHERE usid = ? AND change_amount >= ?
-                                """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
-                                
-                                if result.rowcount == 0:
-                                    # Insufficient balance
-                                    d.execute("SELECT change_amount FROM balance_changes WHERE usid = ?", (withdrawal.user_id,))
-                                    bal_row = d.fetchone()
-                                    current_balance = bal_row['change_amount'] if bal_row else 0.0
-                                    logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
-                                    wconn.rollback()
-                                    return False
-                            except Exception as e:
-                                wconn.rollback()
-                                logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                        # Use viralmonitor API for reply balance operations
+                        try:
+                            from viralmonitor.utils.db import get_total_amount, remove_amount
+                            
+                            # Get current balance using proper viralmonitor API
+                            current_balance = get_total_amount(withdrawal.user_id)
+                            
+                            # Convert USD amount to reply balance units (assuming 1 USD = some amount of reply balance)
+                            # For now, check if we have sufficient balance in native reply units
+                            if current_balance < withdrawal.amount_usd:
+                                logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                conn.rollback()
                                 return False
+                            
+                            # Use viralmonitor's remove_amount function for proper balance deduction
+                            success = remove_amount(withdrawal.user_id, withdrawal.amount_usd)
+                            if not success:
+                                logger.error(f"Failed to deduct reply balance for withdrawal {withdrawal.id}")
+                                conn.rollback()
+                                return False
+                                
+                        except ImportError:
+                            # Fallback to direct database operation if viralmonitor not available
+                            logger.warning("viralmonitor not available, using fallback reply balance operation")
+                            reply_db_path = db_path if db_path else DB_FILE
+                            
+                            with get_connection(reply_db_path) as wconn:
+                                try:
+                                    wconn.execute('BEGIN IMMEDIATE')
+                                    d = wconn.cursor()
+                                    
+                                    # Get total balance for user
+                                    d.execute("SELECT COALESCE(SUM(change_amount), 0) as total_balance FROM balance_changes WHERE usid = ?", (str(withdrawal.user_id),))
+                                    bal_row = d.fetchone()
+                                    current_balance = bal_row['total_balance'] if bal_row else 0.0
+                                    
+                                    if current_balance < withdrawal.amount_usd:
+                                        logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                        wconn.rollback()
+                                        return False
+                                    
+                                    # Add a negative balance change to deduct the amount
+                                    d.execute("""
+                                        INSERT INTO balance_changes (usid, change_amount, change_type, metadata)
+                                        VALUES (?, ?, 'manual_remove', ?)
+                                    """, (str(withdrawal.user_id), -withdrawal.amount_usd, f"Withdrawal {withdrawal.id}"))
+                                    
+                                    wconn.commit()
+                                except Exception as e:
+                                    wconn.rollback()
+                                    logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                                    return False
+                        except Exception as e:
+                            logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                            conn.rollback()
+                            return False
                     
                     # Record operation in ledger
                     from datetime import datetime
@@ -705,40 +727,62 @@ class WithdrawalService:
                         return False
                     
                 elif balance_type == "reply":
-
-                    
-                    # Use viralmonitor db_path if available, otherwise use main DB
-
-                    
-                    reply_db_path = db_path if db_path else DB_FILE
-
-                    
-                    with get_connection(reply_db_path) as wconn:
-                        try:
-                            wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
-                            
-                            # Get withdrawal with row lock (SQLite compatible)
-                            d = wconn.cursor()
-                    
-                            # Atomic update: only succeed if balance is sufficient
-                            result = d.execute("""
-                                UPDATE balance_changes 
-                                SET change_amount = change_amount - ? 
-                                WHERE usid = ? AND change_amount >= ?
-                            """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
-                            
-                            if result.rowcount == 0:
-                                # Insufficient balance
-                                d.execute("SELECT change_amount FROM balance_changes WHERE usid = ?", (withdrawal.user_id,))
-                                bal_row = d.fetchone()
-                                current_balance = bal_row['change_amount'] if bal_row else 0.0
-                                logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
-                                wconn.rollback()
-                                return False
-                        except Exception as e:
-                            wconn.rollback()
-                            logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                    # Use viralmonitor API for reply balance operations
+                    try:
+                        from viralmonitor.utils.db import get_total_amount, remove_amount
+                        
+                        # Get current balance using proper viralmonitor API
+                        current_balance = get_total_amount(withdrawal.user_id)
+                        
+                        # Convert USD amount to reply balance units (assuming 1 USD = some amount of reply balance)
+                        # For now, check if we have sufficient balance in native reply units
+                        if current_balance < withdrawal.amount_usd:
+                            logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                            conn.rollback()
                             return False
+                        
+                        # Use viralmonitor's remove_amount function for proper balance deduction
+                        success = remove_amount(withdrawal.user_id, withdrawal.amount_usd)
+                        if not success:
+                            logger.error(f"Failed to deduct reply balance for withdrawal {withdrawal.id}")
+                            conn.rollback()
+                            return False
+                            
+                    except ImportError:
+                        # Fallback to direct database operation if viralmonitor not available
+                        logger.warning("viralmonitor not available, using fallback reply balance operation")
+                        reply_db_path = db_path if db_path else DB_FILE
+                        
+                        with get_connection(reply_db_path) as wconn:
+                            try:
+                                wconn.execute('BEGIN IMMEDIATE')
+                                d = wconn.cursor()
+                                
+                                # Get total balance for user
+                                d.execute("SELECT COALESCE(SUM(change_amount), 0) as total_balance FROM balance_changes WHERE usid = ?", (str(withdrawal.user_id),))
+                                bal_row = d.fetchone()
+                                current_balance = bal_row['total_balance'] if bal_row else 0.0
+                                
+                                if current_balance < withdrawal.amount_usd:
+                                    logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                    wconn.rollback()
+                                    return False
+                                
+                                # Add a negative balance change to deduct the amount
+                                d.execute("""
+                                    INSERT INTO balance_changes (usid, change_amount, change_type, metadata)
+                                    VALUES (?, ?, 'manual_remove', ?)
+                                """, (str(withdrawal.user_id), -withdrawal.amount_usd, f"Withdrawal {withdrawal.id}"))
+                                
+                                wconn.commit()
+                            except Exception as e:
+                                wconn.rollback()
+                                logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                                return False
+                    except Exception as e:
+                        logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                        conn.rollback()
+                        return False
                 
                 # Record operation in ledger
                 c.execute("""
@@ -818,40 +862,62 @@ class WithdrawalService:
                         return False
                     
                 elif balance_type == "reply":
-
-                    
-                    # Use viralmonitor db_path if available, otherwise use main DB
-
-                    
-                    reply_db_path = db_path if db_path else DB_FILE
-
-                    
-                    with get_connection(reply_db_path) as wconn:
-                        try:
-                            wconn.execute('BEGIN IMMEDIATE')  # Start exclusive transaction
-                            
-                            # Get withdrawal with row lock (SQLite compatible)
-                            d = wconn.cursor()
-                    
-                            # Atomic update: only succeed if balance is sufficient
-                            result = d.execute("""
-                                UPDATE balance_changes 
-                                SET change_amount = change_amount - ? 
-                                WHERE usid = ? AND change_amount >= ?
-                            """, (withdrawal.amount_usd, withdrawal.user_id, withdrawal.amount_usd))
-                            
-                            if result.rowcount == 0:
-                                # Insufficient balance
-                                d.execute("SELECT change_amount FROM balance_changes WHERE usid = ?", (withdrawal.user_id,))
-                                bal_row = d.fetchone()
-                                current_balance = bal_row['change_amount'] if bal_row else 0.0
-                                logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
-                                wconn.rollback()
-                                return False
-                        except Exception as e:
-                            wconn.rollback()
-                            logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                    # Use viralmonitor API for reply balance operations
+                    try:
+                        from viralmonitor.utils.db import get_total_amount, remove_amount
+                        
+                        # Get current balance using proper viralmonitor API
+                        current_balance = get_total_amount(withdrawal.user_id)
+                        
+                        # Convert USD amount to reply balance units (assuming 1 USD = some amount of reply balance)
+                        # For now, check if we have sufficient balance in native reply units
+                        if current_balance < withdrawal.amount_usd:
+                            logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                            conn.rollback()
                             return False
+                        
+                        # Use viralmonitor's remove_amount function for proper balance deduction
+                        success = remove_amount(withdrawal.user_id, withdrawal.amount_usd)
+                        if not success:
+                            logger.error(f"Failed to deduct reply balance for withdrawal {withdrawal.id}")
+                            conn.rollback()
+                            return False
+                            
+                    except ImportError:
+                        # Fallback to direct database operation if viralmonitor not available
+                        logger.warning("viralmonitor not available, using fallback reply balance operation")
+                        reply_db_path = db_path if db_path else DB_FILE
+                        
+                        with get_connection(reply_db_path) as wconn:
+                            try:
+                                wconn.execute('BEGIN IMMEDIATE')
+                                d = wconn.cursor()
+                                
+                                # Get total balance for user
+                                d.execute("SELECT COALESCE(SUM(change_amount), 0) as total_balance FROM balance_changes WHERE usid = ?", (str(withdrawal.user_id),))
+                                bal_row = d.fetchone()
+                                current_balance = bal_row['total_balance'] if bal_row else 0.0
+                                
+                                if current_balance < withdrawal.amount_usd:
+                                    logger.error(f"Insufficient reply balance for withdrawal {withdrawal.id}: {current_balance} < {withdrawal.amount_usd}")
+                                    wconn.rollback()
+                                    return False
+                                
+                                # Add a negative balance change to deduct the amount
+                                d.execute("""
+                                    INSERT INTO balance_changes (usid, change_amount, change_type, metadata)
+                                    VALUES (?, ?, 'manual_remove', ?)
+                                """, (str(withdrawal.user_id), -withdrawal.amount_usd, f"Withdrawal {withdrawal.id}"))
+                                
+                                wconn.commit()
+                            except Exception as e:
+                                wconn.rollback()
+                                logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                                return False
+                    except Exception as e:
+                        logger.error(f"Error during reply balance deduction for withdrawal {withdrawal.id}: {str(e)}")
+                        conn.rollback()
+                        return False
                 
                 # Record operation in ledger
                 c.execute("""

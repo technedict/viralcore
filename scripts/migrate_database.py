@@ -429,10 +429,25 @@ def apply_custom_plans_base_migration():
                     c.execute("ALTER TABLE custom_plans ADD COLUMN updated_at TEXT DEFAULT ''")
                     print("✅ Added updated_at column to custom_plans table")
                     
-                # Update empty timestamp fields
-                current_time = datetime.now().isoformat()
-                c.execute("UPDATE custom_plans SET created_at = ? WHERE created_at = '' OR created_at IS NULL", (current_time,))
-                c.execute("UPDATE custom_plans SET updated_at = ? WHERE updated_at = '' OR updated_at IS NULL", (current_time,))
+                # Update empty timestamp fields with individual timestamps to avoid confusion
+                # This prevents all records from having the same timestamp
+                c.execute("SELECT id FROM custom_plans WHERE created_at = '' OR created_at IS NULL")
+                records_to_update = c.fetchall()
+                
+                for i, (record_id,) in enumerate(records_to_update):
+                    # Add a small offset to each timestamp to make them unique
+                    current_time = datetime.now().isoformat()
+                    # Add microseconds offset to make timestamps unique
+                    timestamp_with_offset = current_time[:-6] + f"{i:06d}"
+                    c.execute("UPDATE custom_plans SET created_at = ? WHERE id = ?", (timestamp_with_offset, record_id))
+                
+                c.execute("SELECT id FROM custom_plans WHERE updated_at = '' OR updated_at IS NULL")
+                records_to_update = c.fetchall()
+                
+                for i, (record_id,) in enumerate(records_to_update):
+                    current_time = datetime.now().isoformat()
+                    timestamp_with_offset = current_time[:-6] + f"{i:06d}"
+                    c.execute("UPDATE custom_plans SET updated_at = ? WHERE id = ?", (timestamp_with_offset, record_id))
                 
             else:
                 # Table doesn't exist, create it with full schema
