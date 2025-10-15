@@ -431,11 +431,11 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
 
         # Use tier-based metrics
         metrics_map = {
-            "t1": (30, 10, 5, 2000),
-            "t2": (50, 20, 10, 5000),
-            "t3": (75, 30, 15, 7000),
-            "t4": (100, 40, 20, 10000),
-            "t5": (150, 60, 30, 15000),
+            "t1": (30, 5, 10, 2000),
+            "t2": (50, 10, 20, 5000),
+            "t3": (75, 15, 30, 7000),
+            "t4": (100, 20, 40, 10000),
+            "t5": (150, 30, 60, 15000),
         }
         t_l, t_rt, t_cm, t_vw = metrics_map.get(tier, (0, 0, 0, 0))
         
