@@ -943,17 +943,20 @@ def get_user_custom_plans(user_id: int, active_only: bool = True) -> List[Dict[s
             
             plans = []
             for row in c.fetchall():
+                # Convert row to dict for easier access
+                row_dict = dict(row)
+                
                 plan_dict = {
-                    'id': row.get('id', 0),
-                    'plan_name': row.get('plan_name', 'Default Plan'),
-                    'target_likes': row.get('target_likes', 0),
-                    'target_retweets': row.get('target_retweets', 0),
-                    'target_comments': row.get('target_comments', 0),
-                    'target_views': row.get('target_views', 0),
-                    'is_active': bool(row.get('is_active', 1)),
-                    'created_at': row.get('created_at', ''),
-                    'updated_at': row.get('updated_at', ''),
-                    'max_posts': row.get('max_posts', 50)
+                    'id': row_dict.get('id', 0),
+                    'plan_name': row_dict.get('plan_name', 'Default Plan'),
+                    'target_likes': row_dict.get('target_likes', 0),
+                    'target_retweets': row_dict.get('target_retweets', 0),
+                    'target_comments': row_dict.get('target_comments', 0),
+                    'target_views': row_dict.get('target_views', 0),
+                    'is_active': bool(row_dict.get('is_active', 1)),
+                    'created_at': row_dict.get('created_at', ''),
+                    'updated_at': row_dict.get('updated_at', ''),
+                    'max_posts': row_dict.get('max_posts', 50)
                 }
                 plans.append(plan_dict)
             
