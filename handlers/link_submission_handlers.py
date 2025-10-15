@@ -273,19 +273,21 @@ async def process_twitter_link(
                     callback_data=f"select_x_{acc}"
                 )])
         
-        # Add custom plan options for each account
+        # Add custom plan options (once each, not per account)
+        # Custom plans are user-level, not account-specific
         custom_plans = get_user_custom_plans(user_id, active_only=True)
         if custom_plans:
-            for acc in accounts:
-                for plan in custom_plans:
-                    plan_name = plan['plan_name']
-                    # Check if this plan has posts remaining
-                    max_posts = plan.get('max_posts', 0)
-                    if max_posts > 0:  # Only show plans with remaining posts
-                        keyboard.append([InlineKeyboardButton(
-                            f"@{acc.title()} (Custom: {plan_name} - {max_posts} posts left)",
-                            callback_data=f"select_x_{acc}_custom_{plan_name}"
-                        )])
+            for plan in custom_plans:
+                plan_name = plan['plan_name']
+                # Check if this plan has posts remaining
+                max_posts = plan.get('max_posts', 0)
+                if max_posts > 0:  # Only show plans with remaining posts
+                    # Use first account for callback, but plan is user-level
+                    first_acc = accounts[0] if accounts else "default"
+                    keyboard.append([InlineKeyboardButton(
+                        f"Custom: {plan_name} - {max_posts} posts left",
+                        callback_data=f"select_x_{first_acc}_custom_{plan_name}"
+                    )])
         
         if keyboard:
             await update.message.reply_text(
