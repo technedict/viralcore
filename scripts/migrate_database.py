@@ -348,7 +348,7 @@ def check_migration_status():
                 c.execute("PRAGMA table_info(custom_plans)")
                 columns = [col[1] for col in c.fetchall()]
                 # Base migration is complete if all required columns exist
-                custom_plans_base_exists = all(col in columns for col in ['is_active', 'created_at', 'updated_at'])
+                custom_plans_base_exists = all(col in columns for col in ['plan_name', 'is_active', 'created_at', 'updated_at'])
                 custom_plans_max_posts_exists = 'max_posts' in columns
             else:
                 custom_plans_base_exists = False
@@ -413,6 +413,10 @@ def apply_custom_plans_base_migration():
                 columns = [col[1] for col in c.fetchall()]
                 
                 # Add missing columns one by one
+                if 'plan_name' not in columns:
+                    c.execute("ALTER TABLE custom_plans ADD COLUMN plan_name TEXT DEFAULT 'Default Plan'")
+                    print("✅ Added plan_name column to custom_plans table")
+                
                 if 'is_active' not in columns:
                     c.execute("ALTER TABLE custom_plans ADD COLUMN is_active INTEGER DEFAULT 1")
                     print("✅ Added is_active column to custom_plans table")

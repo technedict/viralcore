@@ -805,28 +805,81 @@ def get_custom_plan(user_id: int, plan_name: str = None) -> Tuple[int, int, int,
     with get_connection(CUSTOM_DB_FILE) as conn:
         c = conn.cursor()
         
-        if plan_name:
+        # Check what columns exist
+        try:
+            c.execute("PRAGMA table_info(custom_plans)")
+            columns = [col[1] for col in c.fetchall()]
+        except:
+            return (0, 0, 0, 0)
+        
+        # Build safe query
+        if plan_name and 'plan_name' in columns:
             # Get specific plan by name
-            c.execute(
-                """
-                SELECT target_likes, target_retweets, target_comments, target_views
-                FROM custom_plans
-                WHERE user_id = ? AND plan_name = ? AND is_active = 1
-                """,
-                (user_id, plan_name)
-            )
+            query = "SELECT "
+            select_parts = []
+            if 'target_likes' in columns:
+                select_parts.append("target_likes")
+            else:
+                select_parts.append("0 as target_likes")
+            if 'target_retweets' in columns:
+                select_parts.append("target_retweets")
+            else:
+                select_parts.append("0 as target_retweets")
+            if 'target_comments' in columns:
+                select_parts.append("target_comments")
+            else:
+                select_parts.append("0 as target_comments")
+            if 'target_views' in columns:
+                select_parts.append("target_views")
+            else:
+                select_parts.append("0 as target_views")
+                
+            query += ", ".join(select_parts)
+            query += " FROM custom_plans WHERE user_id = ? AND plan_name = ?"
+            
+            if 'is_active' in columns:
+                query += " AND is_active = 1"
+                
+            try:
+                c.execute(query, (user_id, plan_name))
+            except:
+                return (0, 0, 0, 0)
         else:
             # Get first active plan (for backward compatibility)
-            c.execute(
-                """
-                SELECT target_likes, target_retweets, target_comments, target_views
-                FROM custom_plans
-                WHERE user_id = ? AND is_active = 1
-                ORDER BY created_at ASC
-                LIMIT 1
-                """,
-                (user_id,)
-            )
+            query = "SELECT "
+            select_parts = []
+            if 'target_likes' in columns:
+                select_parts.append("target_likes")
+            else:
+                select_parts.append("0 as target_likes")
+            if 'target_retweets' in columns:
+                select_parts.append("target_retweets")
+            else:
+                select_parts.append("0 as target_retweets")
+            if 'target_comments' in columns:
+                select_parts.append("target_comments")
+            else:
+                select_parts.append("0 as target_comments")
+            if 'target_views' in columns:
+                select_parts.append("target_views")
+            else:
+                select_parts.append("0 as target_views")
+                
+            query += ", ".join(select_parts)
+            query += " FROM custom_plans WHERE user_id = ?"
+            
+            if 'is_active' in columns:
+                query += " AND is_active = 1"
+                
+            if 'created_at' in columns:
+                query += " ORDER BY created_at ASC"
+                
+            query += " LIMIT 1"
+            
+            try:
+                c.execute(query, (user_id,))
+            except:
+                return (0, 0, 0, 0)
         
         row = c.fetchone()
         return tuple(row) if row else (0, 0, 0, 0)
@@ -845,37 +898,70 @@ def get_user_custom_plans(user_id: int, active_only: bool = True) -> List[Dict[s
     with get_connection(CUSTOM_DB_FILE) as conn:
         c = conn.cursor()
         
-        query = """
-            SELECT id, plan_name, target_likes, target_retweets, target_comments, target_views, 
-                   is_active, created_at, updated_at, max_posts
+        # First check what columns exist to build a safe query
+        c.execute("PRAGMA table_info(custom_plans)")
+        columns = [col[1] for col in c.fetchall()]
+        
+        # Build query based on available columns
+        select_columns = ["id", "user_id"]
+        
+        # Add columns if they exist
+        if 'plan_name' in columns:
+            select_columns.append("plan_name")
+        if 'target_likes' in columns:
+            select_columns.append("target_likes") 
+        if 'target_retweets' in columns:
+            select_columns.append("target_retweets")
+        if 'target_comments' in columns:
+            select_columns.append("target_comments")
+        if 'target_views' in columns:
+            select_columns.append("target_views")
+        if 'is_active' in columns:
+            select_columns.append("is_active")
+        if 'created_at' in columns:
+            select_columns.append("created_at")
+        if 'updated_at' in columns:
+            select_columns.append("updated_at")
+        if 'max_posts' in columns:
+            select_columns.append("max_posts")
+            
+        query = f"""
+            SELECT {', '.join(select_columns)}
             FROM custom_plans
             WHERE user_id = ?
         """
         params = [user_id]
         
-        if active_only:
+        if active_only and 'is_active' in columns:
             query += " AND is_active = 1"
             
-        query += " ORDER BY created_at DESC"
+        if 'created_at' in columns:
+            query += " ORDER BY created_at DESC"
         
-        c.execute(query, params)
-        
-        plans = []
-        for row in c.fetchall():
-            plans.append({
-                'id': row['id'],
-                'plan_name': row['plan_name'],
-                'target_likes': row['target_likes'],
-                'target_retweets': row['target_retweets'],
-                'target_comments': row['target_comments'],
-                'target_views': row['target_views'],
-                'is_active': bool(row['is_active']),
-                'created_at': row['created_at'],
-                'updated_at': row['updated_at'],
-                'max_posts': row['max_posts']
-            })
-        
-        return plans
+        try:
+            c.execute(query, params)
+            
+            plans = []
+            for row in c.fetchall():
+                plan_dict = {
+                    'id': row.get('id', 0),
+                    'plan_name': row.get('plan_name', 'Default Plan'),
+                    'target_likes': row.get('target_likes', 0),
+                    'target_retweets': row.get('target_retweets', 0),
+                    'target_comments': row.get('target_comments', 0),
+                    'target_views': row.get('target_views', 0),
+                    'is_active': bool(row.get('is_active', 1)),
+                    'created_at': row.get('created_at', ''),
+                    'updated_at': row.get('updated_at', ''),
+                    'max_posts': row.get('max_posts', 50)
+                }
+                plans.append(plan_dict)
+            
+            return plans
+            
+        except Exception as e:
+            print(f"Error querying custom plans: {e}")
+            return []
 
 def create_custom_plan(user_id: int, plan_name: str, likes: int, retweets: int, comments: int, views: int, max_posts: int = 50) -> bool:
     """
