@@ -334,15 +334,27 @@ def check_migration_status():
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='withdrawal_errors'")
         withdrawal_errors_exists = c.fetchone() is not None
     
-    # Check custom plans max_posts column
+    # Check custom plans base migration
+    custom_plans_base_exists = False
     custom_plans_max_posts_exists = False
     try:
         with get_connection(CUSTOM_DB_FILE) as custom_conn:
             c = custom_conn.cursor()
-            c.execute("PRAGMA table_info(custom_plans)")
-            columns = [col[1] for col in c.fetchall()]
-            custom_plans_max_posts_exists = 'max_posts' in columns
+            # Check if table exists
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='custom_plans'")
+            table_exists = c.fetchone() is not None
+            
+            if table_exists:
+                c.execute("PRAGMA table_info(custom_plans)")
+                columns = [col[1] for col in c.fetchall()]
+                # Base migration is complete if all required columns exist
+                custom_plans_base_exists = all(col in columns for col in ['is_active', 'created_at', 'updated_at'])
+                custom_plans_max_posts_exists = 'max_posts' in columns
+            else:
+                custom_plans_base_exists = False
+                custom_plans_max_posts_exists = False
     except Exception:
+        custom_plans_base_exists = False
         custom_plans_max_posts_exists = False
     
     with get_connection(DB_FILE) as conn:
@@ -367,6 +379,7 @@ def check_migration_status():
         print(f"  Withdrawals System:            {'✅ Applied' if withdrawals_exists else '❌ Not Applied'}")
         print(f"  Withdrawal Errors Tracking:    {'✅ Applied' if withdrawal_errors_exists else '❌ Not Applied'}")
         print(f"  Boosting Service Providers:    {'✅ Applied' if boosting_providers_exists else '❌ Not Applied'}")
+        print(f"  Custom Plans Base Schema:      {'✅ Applied' if custom_plans_base_exists else '❌ Not Applied'}")
         print(f"  Custom Plans Max Posts:        {'✅ Applied' if custom_plans_max_posts_exists else '❌ Not Applied'}")
         
         return {
@@ -378,8 +391,71 @@ def check_migration_status():
             'withdrawals': withdrawals_exists,
             'withdrawal_errors': withdrawal_errors_exists,
             'boosting_providers': boosting_providers_exists,
+            'custom_plans_base': custom_plans_base_exists,
             'custom_plans_max_posts': custom_plans_max_posts_exists
         }
+
+def apply_custom_plans_base_migration():
+    """Apply base custom plans table migration."""
+    print("Applying custom plans base migration...")
+    
+    try:
+        with get_connection(CUSTOM_DB_FILE) as conn:
+            c = conn.cursor()
+            
+            # Check if custom_plans table exists
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='custom_plans'")
+            table_exists = c.fetchone() is not None
+            
+            if table_exists:
+                # Table exists, check for missing columns
+                c.execute("PRAGMA table_info(custom_plans)")
+                columns = [col[1] for col in c.fetchall()]
+                
+                # Add missing columns one by one
+                if 'is_active' not in columns:
+                    c.execute("ALTER TABLE custom_plans ADD COLUMN is_active INTEGER DEFAULT 1")
+                    print("✅ Added is_active column to custom_plans table")
+                
+                if 'created_at' not in columns:
+                    c.execute("ALTER TABLE custom_plans ADD COLUMN created_at TEXT DEFAULT ''")
+                    print("✅ Added created_at column to custom_plans table")
+                
+                if 'updated_at' not in columns:
+                    c.execute("ALTER TABLE custom_plans ADD COLUMN updated_at TEXT DEFAULT ''")
+                    print("✅ Added updated_at column to custom_plans table")
+                    
+                # Update empty timestamp fields
+                current_time = datetime.now().isoformat()
+                c.execute("UPDATE custom_plans SET created_at = ? WHERE created_at = '' OR created_at IS NULL", (current_time,))
+                c.execute("UPDATE custom_plans SET updated_at = ? WHERE updated_at = '' OR updated_at IS NULL", (current_time,))
+                
+            else:
+                # Table doesn't exist, create it with full schema
+                c.execute('''
+                    CREATE TABLE custom_plans (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        plan_name TEXT NOT NULL,
+                        target_likes INTEGER DEFAULT 0,
+                        target_retweets INTEGER DEFAULT 0,
+                        target_comments INTEGER DEFAULT 0,
+                        target_views INTEGER DEFAULT 0,
+                        is_active INTEGER DEFAULT 1,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        UNIQUE(user_id, plan_name)
+                    )
+                ''')
+                print("✅ Created custom_plans table with full schema")
+            
+            conn.commit()
+            
+        print("✅ Custom plans base migration completed successfully")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to apply custom plans base migration: {e}")
+        return False
 
 def apply_custom_plans_max_posts_migration():
     """Apply custom plans max_posts column migration."""
@@ -456,6 +532,12 @@ def apply_all_migrations():
     
     # Apply boosting service providers migration
     if apply_boosting_service_providers_migration():
+        migrations_applied += 1
+    else:
+        migrations_failed += 1
+    
+    # Apply custom plans base migration
+    if apply_custom_plans_base_migration():
         migrations_applied += 1
     else:
         migrations_failed += 1
@@ -542,6 +624,8 @@ def main():
         pending_migrations.append('Withdrawals System')
     if not status['boosting_providers']:
         pending_migrations.append('Boosting Service Providers')
+    if not status['custom_plans_base']:
+        pending_migrations.append('Custom Plans Base Schema')
     if not status['custom_plans_max_posts']:
         pending_migrations.append('Custom Plans Max Posts')
     

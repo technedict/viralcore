@@ -190,10 +190,19 @@ def init_custom_db() -> None:
             );
         ''')
         
-        # Add indexes for better performance
+        # Check what columns actually exist before creating indexes
+        c.execute('PRAGMA table_info(custom_plans)')
+        columns = [col[1] for col in c.fetchall()]
+        
+        # Add indexes for better performance (only if columns exist)
         c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_user_id ON custom_plans(user_id)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_active ON custom_plans(user_id, is_active)')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_name ON custom_plans(user_id, plan_name)')
+        
+        if 'is_active' in columns:
+            c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_active ON custom_plans(user_id, is_active)')
+        
+        if 'plan_name' in columns:
+            c.execute('CREATE INDEX IF NOT EXISTS idx_custom_plans_name ON custom_plans(user_id, plan_name)')
+            
     print("Custom DB initialized successfully.")
 
 # --- User & Affiliate Management ---
