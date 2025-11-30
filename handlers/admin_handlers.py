@@ -123,6 +123,7 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("Delete Payment", callback_data="admin_delete_payment")],
             [InlineKeyboardButton("Reset Purchases", callback_data="admin_reset_purchase")],
             [InlineKeyboardButton("Reset Affiliate Balance", callback_data="admin_reset_affiliate")],
+            [InlineKeyboardButton("💰 Adjust Referral Balance", callback_data="admin_adjust_referral_balance")],
             [InlineKeyboardButton("↩️ Back to Admin Panel", callback_data="admin_panel")]
         ]
         await clear_bot_messages(update, context)
@@ -464,6 +465,17 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             "admin_payments_menu" # Back to payments menu
         )
         logger.info(f"Admin {query.from_user.id} initiated 'reset affiliate balance'.")
+
+    elif data == "admin_adjust_referral_balance":
+        await _send_admin_prompt(
+            update, context, "awaiting_adjust_referral_balance",
+            "💰 *Adjust Referral Balance*\nSend: `UserID, Amount, Reason`\n\n"
+            "Use positive amounts to add, negative to remove.\n"
+            "Example: `123456, 10.00, Bonus for promotion`\n"
+            "Example: `123456, -5.00, Correction for error`",
+            "admin_payments_menu" # Back to payments menu
+        )
+        logger.info(f"Admin {query.from_user.id} initiated 'adjust referral balance'.")
 
     elif data == "admin_promote_user":
         await _send_admin_prompt(

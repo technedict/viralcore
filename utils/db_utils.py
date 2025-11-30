@@ -207,19 +207,76 @@ def init_custom_db() -> None:
 
 # --- User & Affiliate Management ---
 
-def create_user(user_id: int, username: str, referrer: Optional[int] = None) -> None:
-    """Insert a new user into the database if they don't already exist."""
+def create_user(user_id: int, username: str, referrer: Optional[int] = None) -> bool:
+    """
+    Insert a new user into the database if they don't already exist.
+    If the user exists but has no referrer and one is provided, update the referrer.
+    
+    Returns:
+        True if a new user was created or referrer was updated, False if user already exists with a referrer.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     with get_connection(DB_FILE) as conn:
         c = conn.cursor()
-        c.execute(
-            """
-            INSERT OR IGNORE INTO users (id, username, referrer)
-            VALUES (?, ?, ?)
-            """,
-            (user_id, username, referrer)
-        )
-        conn.commit()
-    print(f"User {username} (ID: {user_id}) created or already exists.")
+        
+        # Check if user already exists
+        c.execute("SELECT id, referrer FROM users WHERE id = ?", (user_id,))
+        existing_user = c.fetchone()
+        
+        if existing_user:
+            # User exists - check if we can set referrer
+            if referrer and not existing_user['referrer']:
+                # Validate that referrer exists and is not the user themselves
+                if referrer == user_id:
+                    logger.warning(f"Referral attempt: User {user_id} cannot refer themselves.")
+                    return False
+                
+                c.execute("SELECT id FROM users WHERE id = ?", (referrer,))
+                if c.fetchone():
+                    # Valid referrer - update
+                    c.execute(
+                        "UPDATE users SET referrer = ? WHERE id = ?",
+                        (referrer, user_id)
+                    )
+                    conn.commit()
+                    logger.info(f"REFERRAL_REGISTERED: User {user_id} ({username}) referred by user {referrer}")
+                    return True
+                else:
+                    logger.warning(f"Referral attempt: Referrer {referrer} does not exist for user {user_id}")
+                    return False
+            # User already exists with or without referrer
+            logger.debug(f"User {username} (ID: {user_id}) already exists.")
+            return False
+        else:
+            # New user - validate referrer if provided
+            if referrer:
+                if referrer == user_id:
+                    logger.warning(f"Referral attempt: User {user_id} cannot refer themselves.")
+                    referrer = None
+                else:
+                    c.execute("SELECT id FROM users WHERE id = ?", (referrer,))
+                    if not c.fetchone():
+                        logger.warning(f"Referral attempt: Referrer {referrer} does not exist for new user {user_id}")
+                        referrer = None
+            
+            # Create the new user
+            c.execute(
+                """
+                INSERT INTO users (id, username, referrer)
+                VALUES (?, ?, ?)
+                """,
+                (user_id, username, referrer)
+            )
+            conn.commit()
+            
+            if referrer:
+                logger.info(f"REFERRAL_REGISTERED: New user {user_id} ({username}) referred by user {referrer}")
+            else:
+                logger.info(f"User {username} (ID: {user_id}) created without referrer.")
+            
+            return True
 
 def get_user(user_id: int) -> Optional[sqlite3.Row]:
     """Fetch a user's record by their ID."""
@@ -312,6 +369,17 @@ def get_referrer(user_id: int) -> Optional[sqlite3.Row]:
         return get_user(user['referrer'])
     return None
 
+def get_referrer_id(user_id: int) -> Optional[int]:
+    """
+    Retrieve just the referrer's user ID for a given user.
+    This is more efficient when you only need the ID.
+    """
+    with get_connection(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute("SELECT referrer FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        return row['referrer'] if row and row['referrer'] else None
+
 def get_total_referrals(user_id: int) -> int:
     """Count how many users a given user has referred."""
     with get_connection(DB_FILE) as conn:
@@ -363,6 +431,102 @@ def update_affiliate_balance(user_id: int, bonus: float) -> None:
             )
             conn.commit()
         print(f"Affiliate balance for user {user_id} updated by {bonus}.")
+
+def admin_adjust_referral_balance(
+    admin_id: int,
+    target_user_id: int,
+    amount: float,
+    reason: str = "Admin adjustment"
+) -> bool:
+    """
+    Admin function to add or remove referral/affiliate balance to/from any user.
+    Logs all adjustments for audit purposes.
+    
+    Args:
+        admin_id: The admin user ID performing the adjustment
+        target_user_id: The user ID to adjust balance for
+        amount: Amount to add (positive) or remove (negative)
+        reason: Reason for the adjustment
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    import logging
+    from datetime import datetime
+    logger = logging.getLogger(__name__)
+    
+    # Verify admin privileges
+    admin_user = get_user(admin_id)
+    if not admin_user or not admin_user['is_admin']:
+        logger.warning(f"ADMIN_BALANCE_ADJUST_DENIED: User {admin_id} is not an admin")
+        return False
+    
+    # Verify target user exists
+    target_user = get_user(target_user_id)
+    if not target_user:
+        logger.warning(f"ADMIN_BALANCE_ADJUST_FAILED: Target user {target_user_id} does not exist")
+        return False
+    
+    current_balance = target_user['affiliate_balance'] or 0.0
+    
+    # Validate negative adjustments don't go below zero
+    if amount < 0 and abs(amount) > current_balance:
+        logger.warning(
+            f"ADMIN_BALANCE_ADJUST_FAILED: Cannot remove ${abs(amount):.2f} from user {target_user_id}. "
+            f"Current balance: ${current_balance:.2f}"
+        )
+        return False
+    
+    # Calculate new balance once to avoid duplication
+    new_balance = current_balance + amount
+    
+    try:
+        from utils.balance_operations import atomic_balance_update, generate_operation_id
+        
+        operation_id = generate_operation_id(target_user_id, "admin_adjust", abs(amount))
+        
+        success = atomic_balance_update(
+            user_id=target_user_id,
+            balance_type="affiliate",
+            amount=amount,
+            operation_type="admin_adjustment",
+            reason=f"Admin {admin_id}: {reason}",
+            operation_id=operation_id
+        )
+        
+        if success:
+            logger.info(
+                f"ADMIN_BALANCE_ADJUST: Admin {admin_id} adjusted user {target_user_id} "
+                f"balance by ${amount:.2f}. Old: ${current_balance:.2f}, New: ${new_balance:.2f}. "
+                f"Reason: {reason}"
+            )
+        else:
+            logger.error(
+                f"ADMIN_BALANCE_ADJUST_FAILED: Atomic operation failed for admin {admin_id} "
+                f"adjusting user {target_user_id} by ${amount:.2f}"
+            )
+        
+        return success
+        
+    except ImportError:
+        # Fallback to non-atomic operation when balance_operations module is not available
+        # This module is optional and provides enhanced atomic transaction support
+        logger.warning("Using non-atomic balance adjustment (balance_operations module is an optional dependency)")
+        
+        with get_connection(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute(
+                "UPDATE users SET affiliate_balance = ? WHERE id = ?",
+                (new_balance, target_user_id)
+            )
+            conn.commit()
+        
+        logger.info(
+            f"ADMIN_BALANCE_ADJUST: Admin {admin_id} adjusted user {target_user_id} "
+            f"balance by ${amount:.2f}. Old: ${current_balance:.2f}, New: ${new_balance:.2f}. "
+            f"Reason: {reason}"
+        )
+        return True
 
 def decrement_affiliate_balance(user_id: int, amount_to_remove: float) -> bool:
     """

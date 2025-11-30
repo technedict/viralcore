@@ -448,26 +448,20 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
     link_md = escape_markdown(pending['twitter_link'], version=2)
     message_text = generate_x_link_message(user_id, link_md, str(t_cm), str(t_rt))
 
-    # --- priority group logic ---
+    # --- Fair rotation group logic (no priority for any group) ---
     total_groups = len(COMMENT_GROUP_IDS)
-    batch_count = math.ceil(t_cm / ACCOUNTS_PER_GROUP)
-
-    # Always include group 1 first
-    priority = COMMENT_GROUP_IDS[0]
-    remaining = max(0, batch_count - 1)
+    batch_count = min(math.ceil(t_cm / ACCOUNTS_PER_GROUP), total_groups)  # Don't exceed total groups
 
     start_idx = _get_batch_pointer()
-    seq = []
-    i = 0
-    while len(seq) < remaining and total_groups > 1:
+    batch_groups = []
+    
+    # Fair rotation: pick groups starting from current pointer, no priority
+    for i in range(batch_count):
         idx = (start_idx + i) % total_groups
-        grp = COMMENT_GROUP_IDS[idx]
-        if grp != priority:
-            seq.append(grp)
-        i += 1
-
-    batch_groups = [priority] + seq
-    new_pointer = (start_idx + i) % total_groups
+        batch_groups.append(COMMENT_GROUP_IDS[idx])
+    
+    # Update pointer to next position after the last group used
+    new_pointer = (start_idx + batch_count) % total_groups
     _set_batch_pointer(new_pointer)
 
     # Schedule sends with MarkdownV2
@@ -483,7 +477,7 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
             }
         )
     
-    # Track Group 1 send
+    # Track posts sent metric
     LIKES_GROUP_METRICS["posts_sent_group1"] += 1
 
     # Send to Likes Group (independent, fail-safe operation)
@@ -497,7 +491,7 @@ async def x_account_selection_handler(update: Update, context: ContextTypes.DEFA
             post_type="twitter",
         )
     except Exception as e:
-        # Fail-safe: log but don't interrupt Group 1 flow
+        # Fail-safe: log but don't interrupt main flow
         logger.error(
             f"[LikesGroup] Exception in send_to_likes_group for tweet {pending['tweet_id']}: {e}",
             exc_info=True
@@ -582,26 +576,21 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
         f"💬 Targets: {quantity or 0} comments/reactions"
     )
 
-    # Priority + sequential groups
+    # Fair rotation group logic (no priority for any group)
     total_groups = len(COMMENT_GROUP_IDS)
-    batch_count = math.ceil((quantity or 0) / ACCOUNTS_PER_GROUP) if total_groups else 0
+    batch_count = min(math.ceil((quantity or 0) / ACCOUNTS_PER_GROUP), total_groups) if total_groups else 0
 
-    # Always send to group 1 first
-    priority = COMMENT_GROUP_IDS[0] if total_groups else None
-    remaining = max(0, batch_count - 1)
+    # Fair rotation: pick groups starting from current pointer, no priority
     start_idx = _get_batch_pointer()
-
-    seq = []
-    i = 0
-    while len(seq) < remaining and total_groups > 1:
-        idx = (start_idx + i) % total_groups
-        grp = COMMENT_GROUP_IDS[idx]
-        if grp != priority:
-            seq.append(grp)
-        i += 1
-
-    batch_groups = ([priority] if priority is not None else []) + seq
-    new_pointer = (start_idx + i) % total_groups if total_groups else 0
+    batch_groups = []
+    
+    for i in range(batch_count):
+        if total_groups > 0:
+            idx = (start_idx + i) % total_groups
+            batch_groups.append(COMMENT_GROUP_IDS[idx])
+    
+    # Update pointer to next position after the last group used
+    new_pointer = (start_idx + batch_count) % total_groups if total_groups else 0
     _set_batch_pointer(new_pointer)
 
     # Schedule sends
@@ -617,7 +606,7 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
             }
         )
     
-    # Track Group 1 send
+    # Track posts sent metric
     LIKES_GROUP_METRICS["posts_sent_group1"] += 1
 
     # Send to Likes Group (independent, fail-safe operation)
@@ -632,7 +621,7 @@ async def tg_account_selection_handler(update: Update, context: ContextTypes.DEF
             post_type="telegram",
         )
     except Exception as e:
-        # Fail-safe: log but don't interrupt Group 1 flow
+        # Fail-safe: log but don't interrupt main flow
         logger.error(
             f"[LikesGroup] Exception in send_to_likes_group for TG post {pending['telegram_link']}: {e}",
             exc_info=True

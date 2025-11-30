@@ -207,6 +207,59 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("❌ Invalid UserID.")
         return
 
+    # 7.5) Adjust referral balance: "UserID, Amount, Reason"
+    if context.user_data.pop("awaiting_adjust_referral_balance", None):
+        try:
+            from utils.db_utils import admin_adjust_referral_balance, get_affiliate_balance, get_user
+            
+            parts = [p.strip() for p in text.split(",", 2)]  # Split into max 3 parts
+            if len(parts) < 2:
+                raise ValueError("Expected at least 2 values: UserID, Amount")
+            
+            uid = int(parts[0])
+            amount = float(parts[1])
+            reason = parts[2] if len(parts) > 2 else "Admin adjustment"
+            
+            # Verify target user exists first
+            target_user = get_user(uid)
+            if not target_user:
+                await update.message.reply_text(f"❌ User {uid} does not exist.")
+                return
+            
+            admin_id = update.effective_user.id
+            old_balance = get_affiliate_balance(uid)
+            
+            success = admin_adjust_referral_balance(admin_id, uid, amount, reason)
+            
+            if success:
+                new_balance = get_affiliate_balance(uid)
+                action = "Added" if amount >= 0 else "Removed"
+                await update.message.reply_text(
+                    f"✅ {action} ${abs(amount):.2f} {'to' if amount >= 0 else 'from'} user {uid}.\n"
+                    f"Old balance: ${old_balance:.2f}\n"
+                    f"New balance: ${new_balance:.2f}\n"
+                    f"Reason: {reason}"
+                )
+                logger.info(
+                    f"Admin {admin_id} adjusted user {uid} referral balance: "
+                    f"{amount:+.2f} (old: ${old_balance:.2f}, new: ${new_balance:.2f}). Reason: {reason}"
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ Failed to adjust balance. Make sure you have admin privileges "
+                    f"and the amount doesn't exceed available balance for removals."
+                )
+        except ValueError as e:
+            await update.message.reply_text(
+                f"❌ Invalid format. Use: `UserID, Amount, Reason`\n"
+                f"Example: `123456, 10.00, Bonus for promotion`\n"
+                f"Error: {e}"
+            )
+        except Exception as e:
+            logger.exception("Error adjusting referral balance")
+            await update.message.reply_text(f"❌ Error: {e}")
+        return
+
     # 8) Promote to admin: "UserID"
     if context.user_data.pop("awaiting_promotion", None):
         try:
