@@ -477,6 +477,9 @@ def admin_adjust_referral_balance(
         )
         return False
     
+    # Calculate new balance once to avoid duplication
+    new_balance = current_balance + amount
+    
     try:
         from utils.balance_operations import atomic_balance_update, generate_operation_id
         
@@ -492,7 +495,6 @@ def admin_adjust_referral_balance(
         )
         
         if success:
-            new_balance = current_balance + amount
             logger.info(
                 f"ADMIN_BALANCE_ADJUST: Admin {admin_id} adjusted user {target_user_id} "
                 f"balance by ${amount:.2f}. Old: ${current_balance:.2f}, New: ${new_balance:.2f}. "
@@ -507,10 +509,9 @@ def admin_adjust_referral_balance(
         return success
         
     except ImportError:
-        # Fallback to non-atomic operation
-        logger.warning("Using non-atomic balance adjustment (balance_operations module not available)")
-        
-        new_balance = current_balance + amount
+        # Fallback to non-atomic operation when balance_operations module is not available
+        # This module is optional and provides enhanced atomic transaction support
+        logger.warning("Using non-atomic balance adjustment (balance_operations module is an optional dependency)")
         
         with get_connection(DB_FILE) as conn:
             c = conn.cursor()
