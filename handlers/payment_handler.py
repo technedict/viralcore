@@ -23,6 +23,7 @@ from utils.payment_utils import (
 )
 from utils.db_utils import (
     get_referrer,
+    get_referrer_id,
     update_affiliate_balance,
     save_purchase,
     is_transaction_hash_processed,
@@ -1129,12 +1130,17 @@ class PaymentHandler:
         logger.info(f"Purchase saved and/or notification sent for user {user_id}: Plan '{current_plan_type}' x {ordered_quantity} via {payment_type}. Invoice: {invoice_id}, Amount: ${received_amount_usd:.2f}.")
 
         # --- Affiliate bonus handling ---
-        referrer_id = get_referrer(user_id)
-        if referrer_id:
+        referrer_record = get_referrer(user_id)
+        if referrer_record:
+            referrer_id = referrer_record['id']  # Extract the actual user ID from the Row
             referral_bonus = received_amount_usd * 0.10  # Using 10% directly
             update_affiliate_balance(referrer_id, referral_bonus)
+            logger.info(
+                f"REFERRAL_BONUS: User {user_id} payment of ${received_amount_usd:.2f} "
+                f"credited ${referral_bonus:.2f} to referrer {referrer_id}"
+            )
             try:
-                referrer_x_username = get_user_x_username(referrer_id) # Consider if this is always needed or can be optimized
+                referrer_x_username = get_user_x_username(referrer_id)
                 referrer_notification_text = (
                     f"💰 Great news! Your referral "
                     f"[{escape_markdown_v2(user_username)}](tg://user?id={user_id}) "
