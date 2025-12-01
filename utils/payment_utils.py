@@ -10,6 +10,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 from utils.config import APIConfig
 from utils.menu_utils import clear_bot_messages
+from utils.messaging import escape_markdown_v2
 from utils.db_utils import (
     get_referrer,
     update_affiliate_balance,
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 # Force requests/urllib3 to use IPv4 only
 urllib3_cn.HAS_IPV6 = False
+
+# Default display value for missing data
+DEFAULT_NOT_AVAILABLE = 'N/A'
 
 # -------------------------------
 # Crypto Deposit Addresses
@@ -371,7 +375,7 @@ async def poll_bank_payment_status(
                     transaction_ref=tx_ref,
                 )
                 await update.effective_chat.send_message(
-                    "Thank you for your Telegram Engagement order\! Send the Telegram Username associated with this payment\.",
+                    r"Thank you for your Telegram Engagement order\! Send the Telegram Username associated with this payment\.",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "x_engagement":
@@ -388,15 +392,17 @@ async def poll_bank_payment_status(
                     transaction_ref=tx_ref,
                 )
                 await update.effective_chat.send_message(
-                    "Thank you for your X \(Twitter\) Engagement order\! Send the Twitter Username associated with this payment\.",
+                    r"Thank you for your X \(Twitter\) Engagement order\! Send the Twitter Username associated with this payment\.",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "tg_automation":
+                safe_username = escape_markdown_v2(user_username if user_username else DEFAULT_NOT_AVAILABLE)
+                safe_tx_ref = escape_markdown_v2(tx_ref if tx_ref else DEFAULT_NOT_AVAILABLE)
                 admin_message = (
-                    f" *NEW TELEGRAM AUTOMATION REQUEST!* \n\n"
+                    f" *NEW TELEGRAM AUTOMATION REQUEST\\!* \n\n"
                     f"User ID: `{user_id}`\n"
-                    f"Username: @{user_username if user_username else 'N/A'}\n"
-                    f"Payment Confirmed: `${total_cost_usd:.2f}` via  (TxRef: `{tx_ref if tx_ref else 'N/A'}`)"
+                    f"Username: @{safe_username}\n"
+                    f"Payment Confirmed: `${total_cost_usd:.2f}` via \\(TxRef: `{safe_tx_ref}`\\)"
                 )
                 await send_message_to_admin(admin_message=admin_message, context=context)
                 await update.effective_chat.send_message("✅ Your request for TELEGRAM AUTOMATION has been sent to the admin and is being processed.")
@@ -415,8 +421,8 @@ async def poll_bank_payment_status(
                 )
                 context.user_data["awaiting_x_poll_details"] = True
                 await update.effective_chat.send_message(
-                    "Please send the X \(Twitter\) poll link and the option number "
-                    "you want to vote for, separated by a comma \(`https://x.com/status/1234567890/polls/abcdef, 1`\)",
+                    r"Please send the X \(Twitter\) poll link and the option number "
+                    r"you want to vote for, separated by a comma \(`https://x.com/status/1234567890/polls/abcdef, 1`\)",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "direct_add":
@@ -431,7 +437,7 @@ async def poll_bank_payment_status(
                 )
                 context.user_data["awaiting_direct_add_link_input"] = True
                 await update.effective_chat.send_message(
-                    "Please send the X \(Twitter\) profile link for your Direct Add Followers order \(e.g., `https://x.com/username`\)",
+                    r"Please send the X \(Twitter\) profile link for your Direct Add Followers order \(e\.g\., `https://x.com/username`\)",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "slow_push":
@@ -446,7 +452,7 @@ async def poll_bank_payment_status(
                 )
                 context.user_data["awaiting_slow_push_profile_link"] = True
                 await update.effective_chat.send_message(
-                    "Please send the X \(Twitter\) profile link for your Slow Push Followers order \(e.g., `https://x.com/username`\)",
+                    r"Please send the X \(Twitter\) profile link for your Slow Push Followers order \(e\.g\., `https://x.com/username`\)",
                     parse_mode='MarkdownV2'
                 )
             else:
@@ -461,7 +467,7 @@ async def poll_bank_payment_status(
                     transaction_ref=tx_ref,
                 )
                 await update.effective_chat.send_message(
-                    "Your order has been placed and will be processed shortly\. Thank you\!",
+                    r"Your order has been placed and will be processed shortly\. Thank you\!",
                     parse_mode='MarkdownV2'
                 )
 

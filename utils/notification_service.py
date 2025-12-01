@@ -276,32 +276,27 @@ class NotificationService:
     
     def _format_telegram_message(self, message: NotificationMessage) -> str:
         """Format message for Telegram with MarkdownV2 escaping."""
-        def escape_md(text: str) -> str:
-            """Escape special characters for MarkdownV2."""
-            special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-            for char in special_chars:
-                text = text.replace(char, f'\\{char}')
-            return text
+        from utils.messaging import escape_markdown_v2
         
         lines = [
-            f"*{escape_md(message.title)}*",
+            f"*{escape_markdown_v2(message.title)}*",
             "",
-            escape_md(message.body)
+            escape_markdown_v2(message.body)
         ]
         
         if message.correlation_id:
             lines.append("")
-            lines.append(f"📋 Correlation ID: `{escape_md(message.correlation_id)}`")
+            lines.append(f"📋 Correlation ID: `{escape_markdown_v2(message.correlation_id)}`")
         
         if message.action_url:
             lines.append("")
-            lines.append(f"🔗 [View Details]({escape_md(message.action_url)})")
+            lines.append(f"🔗 [View Details]({escape_markdown_v2(message.action_url)})")
         
         if message.metadata:
             lines.append("")
             lines.append("*Details:*")
             for key, value in message.metadata.items():
-                lines.append(f"  • {escape_md(key)}: {escape_md(str(value))}")
+                lines.append(f"  • {escape_markdown_v2(key)}: {escape_markdown_v2(str(value))}")
         
         return "\n".join(lines)
     

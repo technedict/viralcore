@@ -51,8 +51,8 @@ async def admin_withdrawal_mode_handler(update: Update, context: ContextTypes.DE
     if success:
         success_text = (
             f"✅ *Withdrawal Mode Updated*\n\n"
-            f"**New Mode:** {mode_name}\n"
-            f"**Description:** {mode_description}\n\n"
+            f"**New Mode:** {escape_markdown_v2(mode_name)}\n"
+            f"**Description:** {escape_markdown_v2(mode_description)}\n\n"
             f"This change will affect all future withdrawal requests\\."
         )
         
@@ -244,7 +244,10 @@ async def admin_approve_withdrawal_handler(update: Update, context: ContextTypes
     # Check if withdrawal is pending approval
     # Note: Both manual and automatic withdrawals now require admin approval
     if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
-        msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\)\\.", parse_mode=ParseMode.MARKDOWN_V2)
+        msg = await query.message.reply_text(
+            f"❌ Withdrawal is not pending \\(current state: {escape_markdown_v2(withdrawal.admin_approval_state.value)}\\)\\.", 
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
         return
     
     # Approve the withdrawal using unified method based on current mode  
@@ -352,7 +355,10 @@ async def admin_reject_withdrawal_handler(update: Update, context: ContextTypes.
     # Check if withdrawal is pending approval
     # Note: Both manual and automatic withdrawals can be rejected
     if withdrawal.admin_approval_state != AdminApprovalState.PENDING:
-        msg = await query.message.reply_text(f"❌ Withdrawal is not pending \\(current state: {withdrawal.admin_approval_state.value}\\)\\.", parse_mode=ParseMode.MARKDOWN_V2)
+        msg = await query.message.reply_text(
+            f"❌ Withdrawal is not pending \\(current state: {escape_markdown_v2(withdrawal.admin_approval_state.value)}\\)\\.", 
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
         return
     
     # Reject the withdrawal using the generic method
