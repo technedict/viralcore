@@ -372,7 +372,7 @@ async def poll_bank_payment_status(
                     transaction_ref=tx_ref,
                 )
                 await update.effective_chat.send_message(
-                    "Thank you for your Telegram Engagement order\! Send the Telegram Username associated with this payment\.",
+                    r"Thank you for your Telegram Engagement order\! Send the Telegram Username associated with this payment\.",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "x_engagement":
@@ -389,7 +389,7 @@ async def poll_bank_payment_status(
                     transaction_ref=tx_ref,
                 )
                 await update.effective_chat.send_message(
-                    "Thank you for your X \(Twitter\) Engagement order\! Send the Twitter Username associated with this payment\.",
+                    r"Thank you for your X \(Twitter\) Engagement order\! Send the Twitter Username associated with this payment\.",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "tg_automation":
@@ -418,8 +418,8 @@ async def poll_bank_payment_status(
                 )
                 context.user_data["awaiting_x_poll_details"] = True
                 await update.effective_chat.send_message(
-                    "Please send the X \(Twitter\) poll link and the option number "
-                    "you want to vote for, separated by a comma \(`https://x.com/status/1234567890/polls/abcdef, 1`\)",
+                    r"Please send the X \(Twitter\) poll link and the option number "
+                    r"you want to vote for, separated by a comma \(`https://x.com/status/1234567890/polls/abcdef, 1`\)",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "direct_add":
@@ -434,7 +434,7 @@ async def poll_bank_payment_status(
                 )
                 context.user_data["awaiting_direct_add_link_input"] = True
                 await update.effective_chat.send_message(
-                    "Please send the X \(Twitter\) profile link for your Direct Add Followers order \(e.g., `https://x.com/username`\)",
+                    r"Please send the X \(Twitter\) profile link for your Direct Add Followers order \(e\.g\., `https://x.com/username`\)",
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "slow_push":
@@ -449,7 +449,7 @@ async def poll_bank_payment_status(
                 )
                 context.user_data["awaiting_slow_push_profile_link"] = True
                 await update.effective_chat.send_message(
-                    "Please send the X \(Twitter\) profile link for your Slow Push Followers order \(e.g., `https://x.com/username`\)",
+                    r"Please send the X \(Twitter\) profile link for your Slow Push Followers order \(e\.g\., `https://x.com/username`\)",
                     parse_mode='MarkdownV2'
                 )
             else:
@@ -464,7 +464,7 @@ async def poll_bank_payment_status(
                     transaction_ref=tx_ref,
                 )
                 await update.effective_chat.send_message(
-                    "Your order has been placed and will be processed shortly\. Thank you\!",
+                    r"Your order has been placed and will be processed shortly\. Thank you\!",
                     parse_mode='MarkdownV2'
                 )
 
