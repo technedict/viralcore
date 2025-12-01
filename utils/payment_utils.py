@@ -10,6 +10,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext
 from utils.config import APIConfig
 from utils.menu_utils import clear_bot_messages
+from utils.messaging import escape_markdown_v2
 from utils.db_utils import (
     get_referrer,
     update_affiliate_balance,
@@ -392,11 +393,13 @@ async def poll_bank_payment_status(
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "tg_automation":
+                safe_username = escape_markdown_v2(user_username if user_username else 'N/A')
+                safe_tx_ref = escape_markdown_v2(tx_ref if tx_ref else 'N/A')
                 admin_message = (
-                    f" *NEW TELEGRAM AUTOMATION REQUEST!* \n\n"
+                    f" *NEW TELEGRAM AUTOMATION REQUEST\\!* \n\n"
                     f"User ID: `{user_id}`\n"
-                    f"Username: @{user_username if user_username else 'N/A'}\n"
-                    f"Payment Confirmed: `${total_cost_usd:.2f}` via  (TxRef: `{tx_ref if tx_ref else 'N/A'}`)"
+                    f"Username: @{safe_username}\n"
+                    f"Payment Confirmed: `${total_cost_usd:.2f}` via \\(TxRef: `{safe_tx_ref}`\\)"
                 )
                 await send_message_to_admin(admin_message=admin_message, context=context)
                 await update.effective_chat.send_message("✅ Your request for TELEGRAM AUTOMATION has been sent to the admin and is being processed.")
