@@ -298,19 +298,19 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if referrer_info:
             referrer_id = referrer_info[0]
             referrer_username = referrer_info[1] if referrer_info[1] else "No username"
-            referrer_msg = f"Your referrer: [{escape_markdown_v2(referrer_username)}](tg://user?id={referrer_id})."
+            referrer_msg = f"Your referrer: [{escape_markdown_v2(referrer_username)}](tg://user?id={referrer_id})\\."
         else:
-            referrer_msg = "You don't currently have a referrer."
+            referrer_msg = "You don't currently have a referrer\\."
 
         total_referrals = get_total_referrals(user_id)
 
         reply_text_content = (
             f"🤝 *Affiliate Program*\n\n"
-            f"Share your referral link to earn commissions on new purchases!\n"
-            f"Your referral link: `https://t.me/{context.bot.username}?start=ref_{user_id}`\n\n"
-            f"You have referred *{total_referrals}* users.\n"
+            f"Share your referral link to earn commissions on new purchases\\!\n"
+            f"Your referral link: `https://t\\.me/{escape_markdown_v2(context.bot.username)}?start=ref_{user_id}`\n\n"
+            f"You have referred *{total_referrals}* users\\.\n"
             f"{referrer_msg}\n\n"
-            f"You earn *10%* of every successful payment made by your referrals." 
+            f"You earn *10%* of every successful payment made by your referrals\\." 
         )
         reply_keyboard  = [
             [InlineKeyboardButton("↩️ Balance", callback_data="affiliate_balance_menu")],
@@ -324,11 +324,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["ref_balance"] = balance
         total_referrals = get_total_referrals(user_id)
 
+        # Escape the decimal balance to handle the period
+        escaped_balance = escape_markdown_v2(f"{balance:.2f}")
+        
         reply_text_content = (
             f"💰 *My Balance*\n\n"
-            f"Your current affiliate balance: *${balance:.2f}*\n"
+            f"Your current affiliate balance: *${escaped_balance}*\n"
             f"Total users referred by you: *{total_referrals}*\n\n"
-            f"You can use your balance to pay for services or request a payout."
+            f"You can use your balance to pay for services or request a payout\\."
         )
         reply_keyboard  = [
             [InlineKeyboardButton("💸 Withdraw Balance", callback_data="withdraw")],
@@ -341,12 +344,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_x_posts, total_tg_posts, affiliate_balance = get_user_metrics(user_id)
         total_referrals = get_total_referrals(user_id) # Still useful for context
 
+        # Escape the decimal balance to handle the period
+        escaped_balance = escape_markdown_v2(f"{affiliate_balance:.2f}")
+        
         reply_text_content = (
             f"💰 *My Balance & Engagements*\n\n"
             f"📊 *Posts Left:*\n"
-            f"🐦 X (Twitter): {total_x_posts} posts\n"
+            f"🐦 X \\(Twitter\\): {total_x_posts} posts\n"
             f"✈️ Telegram: {total_tg_posts} posts\n\n"
-            f"💸 *Affiliate Balance:* ${affiliate_balance:.2f}\n" # Formats to 2 decimal places
+            f"💸 *Affiliate Balance:* ${escaped_balance}\n"
         )
         reply_keyboard = [
             [InlineKeyboardButton("View Detailed Balance", callback_data="balance_details")],
@@ -368,7 +374,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "task_to_earn_menu":
         reply_text_content = (
             f"✅ *Task 2 Earn*\n\n"
-            f"This section is under development. Soon you'll be able to earn credits by completing simple tasks!"
+            f"This section is under development\\. Soon you'll be able to earn credits by completing simple tasks\\!"
         )
         reply_keyboard  = [
             # Add task-specific buttons here if needed later
@@ -384,9 +390,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             f"ℹ️ *Support*\n\n"
             f"If you have any questions or encounter issues, please contact our support team:\n"
-            f"- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
-            f"- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
-            f"We are here to help you!"
+            f"\\- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
+            f"\\- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
+            f"We are here to help you\\!"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Join Support Channel", url=support_channel_link)],
@@ -795,14 +801,16 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if ref_balance is not None:
             context.user_data["is_affiliate_withdrawal"] = True
-            reply_text_content = f"Enter the amount you'd like to withdraw (Balance: *${ref_balance:.2f}*):"
+            escaped_balance = escape_markdown_v2(f"{ref_balance:.2f}")
+            reply_text_content = f"Enter the amount you'd like to withdraw \\(Balance: *${escaped_balance}*\\):"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="affiliate_balance")]]
             current_slide_key = "withdraw_affiliate_amount"
         else:
             context.user_data["is_affiliate_withdrawal"] = False
             user_total_amount = get_total_amount(user_id)
             context.user_data["reply_balance"] = user_total_amount
-            reply_text_content = f"Enter the amount you'd like to withdraw (Min: ₦100) \n(Balance: *₦{user_total_amount:,.2f}*):"
+            escaped_balance = escape_markdown_v2(f"{user_total_amount:,.2f}")
+            reply_text_content = f"Enter the amount you'd like to withdraw \\(Min: ₦100\\) \n\\(Balance: *₦{escaped_balance}*\\):"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="reply_guys_panel")]]
             current_slide_key = "withdraw_reply_amount"
 
@@ -964,7 +972,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- Final Message Rendering ---
     img_path = APIConfig.SLIDE_IMAGES.get(current_slide_key)
     await clear_bot_messages(update, context)
-    reply_text_content = escape_markdown_v2(reply_text_content)
+    # NOTE: DO NOT escape the entire reply_text_content here.
+    # Template markdown formatting (like *bold*) would be broken.
+    # User values should be escaped where they are inserted into templates.
+    # Static special chars (. ! - ( ) etc.) should be pre-escaped in templates.
 
     try:
         if img_path and os.path.isfile(img_path):
