@@ -35,7 +35,7 @@ from utils.menu_utils import (
     clear_awaiting_flags,
 )
 from utils.admin_db_utils import is_admin as is_user_admin
-from utils.messaging import escape_markdown_v2 # Added for withdrawal handler (escape_markdown_v2 renamed to escape_m
+from utils.messaging import escape_markdown_v2
 from handlers.payment_handler import PaymentHandler
 from utils.payment_utils import initiate_flutterwave_transfer # Added for withdrawal handler
 import sys, os
