@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
 Tests for the messaging and MarkdownV2 functionality.
+
+This module tests:
+- escape_markdown_v2(): MarkdownV2 special character escaping
+- escape_markdown(): Legacy Markdown special character escaping
+- sanitize_html(): HTML sanitization for Telegram
+- format_safe(): Template formatting with auto-escaping based on parse_mode
+- render_markdown_v2(): MarkdownV2 template rendering
+- validate_template(): Template variable validation
+- _strip_markdown(): Markdown stripping for plain text fallback
 """
 
 import sys
@@ -9,7 +18,15 @@ import os
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.messaging import escape_markdown_v2, render_markdown_v2, validate_template, _strip_markdown
+from utils.messaging import (
+    escape_markdown_v2, 
+    escape_markdown,
+    sanitize_html,
+    format_safe,
+    render_markdown_v2, 
+    validate_template, 
+    _strip_markdown
+)
 from utils.logging import setup_logging
 
 def test_escape_markdown_v2():
@@ -142,6 +159,161 @@ def test_edge_cases():
     print(f"✓ Template structure preserved: '{rendered}'")
 
 
+def test_escape_markdown():
+    """Test legacy Markdown escaping functionality."""
+    print("Testing legacy Markdown escaping...")
+    
+    # Test basic special characters (legacy Markdown has fewer)
+    test_cases = [
+        ("Hello_world", "Hello\\_world"),
+        ("Bold *text*", "Bold \\*text\\*"),
+        ("Code `block`", "Code \\`block\\`"),
+        ("[link]", "\\[link]"),  # Only [ is escaped in legacy
+        ("Normal.text!", "Normal.text!"),  # . and ! NOT escaped in legacy Markdown
+    ]
+    
+    for original, expected in test_cases:
+        escaped = escape_markdown(original)
+        assert escaped == expected, f"Expected {expected}, got {escaped}"
+        print(f"✓ '{original}' -> '{escaped}'")
+
+
+def test_sanitize_html():
+    """Test HTML sanitization for Telegram."""
+    print("Testing HTML sanitization...")
+    
+    # Test basic HTML escaping (single quotes are escaped as &#x27; by html.escape)
+    test_cases = [
+        ("<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;/script&gt;"),
+        ("Hello <world>", "Hello &lt;world&gt;"),
+        ("A & B", "A &amp; B"),
+    ]
+    
+    for original, expected in test_cases:
+        sanitized = sanitize_html(original, preserve_allowed_tags=False)
+        assert sanitized == expected, f"Expected {expected}, got {sanitized}"
+        print(f"✓ '{original}' -> '{sanitized}'")
+    
+    # Test preserving allowed tags
+    allowed_tag_cases = [
+        ("<b>Bold</b>", "<b>Bold</b>"),
+        ("<i>Italic</i>", "<i>Italic</i>"),
+        ("<code>code</code>", "<code>code</code>"),
+    ]
+    
+    for original, expected in allowed_tag_cases:
+        sanitized = sanitize_html(original, preserve_allowed_tags=True)
+        assert sanitized == expected, f"Expected {expected}, got {sanitized}"
+        print(f"✓ Allowed tag preserved: '{original}'")
+
+
+def test_format_safe():
+    """Test the format_safe helper for all parse modes."""
+    print("Testing format_safe...")
+    
+    template = "Hello *{name}*! Your balance is ${amount}."
+    values = {"name": "John_Doe", "amount": "100.50"}
+    
+    # Test MarkdownV2
+    result = format_safe(template, values, "MarkdownV2")
+    expected = "Hello *John\\_Doe*! Your balance is $100\\.50."
+    assert result == expected, f"MarkdownV2: Expected {expected}, got {result}"
+    print(f"✓ MarkdownV2: '{result}'")
+    
+    # Test legacy Markdown
+    result = format_safe(template, values, "Markdown")
+    expected = "Hello *John\\_Doe*! Your balance is $100.50."
+    assert result == expected, f"Markdown: Expected {expected}, got {result}"
+    print(f"✓ Markdown: '{result}'")
+    
+    # Test HTML
+    html_template = "Hello <b>{name}</b>! Script: {script}"
+    html_values = {"name": "User", "script": "<script>"}
+    result = format_safe(html_template, html_values, "HTML")
+    expected = "Hello <b>User</b>! Script: &lt;script&gt;"
+    assert result == expected, f"HTML: Expected {expected}, got {result}"
+    print(f"✓ HTML: '{result}'")
+    
+    # Test no parse mode (no escaping)
+    result = format_safe(template, values, None)
+    expected = "Hello *John_Doe*! Your balance is $100.50."
+    assert result == expected, f"None: Expected {expected}, got {result}"
+    print(f"✓ No parse mode: '{result}'")
+
+
+def test_malicious_inputs():
+    """Test handling of potentially malicious user inputs."""
+    print("Testing malicious input handling...")
+    
+    # MarkdownV2 injection attempts
+    malicious_cases = [
+        ("*bold attempt*", "\\*bold attempt\\*"),
+        ("_italic_attempt_", "\\_italic\\_attempt\\_"),
+        ("[link](http://evil.com)", "\\[link\\]\\(http://evil\\.com\\)"),
+        ("```code block```", "\\`\\`\\`code block\\`\\`\\`"),
+        ("\\escape\\me\\", "\\\\escape\\\\me\\\\"),
+        ("Emoji 🎉 test", "Emoji 🎉 test"),  # Emoji should pass through
+        ("مرحبا العالم", "مرحبا العالم"),  # Arabic text should pass through
+        ("日本語テスト", "日本語テスト"),  # Japanese text should pass through
+    ]
+    
+    for original, expected in malicious_cases:
+        escaped = escape_markdown_v2(original)
+        assert escaped == expected, f"Expected {expected}, got {escaped}"
+        print(f"✓ Malicious input escaped: '{original[:20]}...'")
+    
+    # HTML injection attempts with sanitize_html
+    html_malicious = [
+        ("<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;/script&gt;"),
+        ("<img onerror=alert(1)>", "&lt;img onerror=alert(1)&gt;"),
+    ]
+    
+    for original, expected in html_malicious:
+        sanitized = sanitize_html(original, preserve_allowed_tags=False)
+        assert sanitized == expected, f"Expected {expected}, got {sanitized}"
+        print(f"✓ HTML injection blocked: '{original[:30]}...'")
+
+
+def test_representative_templates():
+    """Test real-world template patterns used in the bot."""
+    print("Testing representative templates...")
+    
+    # Withdrawal approval message
+    template = (
+        "✅ *Withdrawal Approved*\n\n"
+        "💵 Amount: ₦{amount}\n"
+        "🏦 Bank: {bank}\n"
+        "📝 Request ID: {request_id}"
+    )
+    values = {"amount": "5000.50", "bank": "First_Bank", "request_id": "WD-123"}
+    result = format_safe(template, values, "MarkdownV2")
+    assert "5000\\.50" in result
+    assert "First\\_Bank" in result
+    assert "WD\\-123" in result
+    print("✓ Withdrawal template formatted correctly")
+    
+    # Admin notification
+    template = (
+        "🚀 *New Order*\n"
+        "User: {username}\n"
+        "Link: {link}\n"
+        "Status: *Paid*"
+    )
+    values = {"username": "@john_doe", "link": "https://x.com/status/123"}
+    result = format_safe(template, values, "MarkdownV2")
+    assert "@john\\_doe" in result
+    assert "https://x\\.com/status/123" in result
+    print("✓ Admin notification template formatted correctly")
+    
+    # Balance info with currency symbols
+    template = "Balance: ${usd} | ₦{ngn}"
+    values = {"usd": "100.00", "ngn": "150000"}
+    result = format_safe(template, values, "MarkdownV2")
+    assert "$100\\.00" in result
+    assert "₦150000" in result
+    print("✓ Balance template formatted correctly")
+
+
 def main():
     """Run all tests."""
     print("Starting messaging system tests...")
@@ -156,6 +328,11 @@ def main():
         test_validate_template()
         test_strip_markdown()
         test_edge_cases()
+        test_escape_markdown()
+        test_sanitize_html()
+        test_format_safe()
+        test_malicious_inputs()
+        test_representative_templates()
         
         print("\n✅ All messaging tests passed!")
         return 0
