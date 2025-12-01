@@ -260,7 +260,8 @@ def test_malicious_inputs():
     for original, expected in malicious_cases:
         escaped = escape_markdown_v2(original)
         assert escaped == expected, f"Expected {expected}, got {escaped}"
-        print(f"✓ Malicious input escaped: '{original[:20]}...'")
+        preview = original[:20] + '...' if len(original) > 20 else original
+        print(f"✓ Malicious input escaped: '{preview}'")
     
     # HTML injection attempts with sanitize_html
     html_malicious = [
@@ -271,7 +272,8 @@ def test_malicious_inputs():
     for original, expected in html_malicious:
         sanitized = sanitize_html(original, preserve_allowed_tags=False)
         assert sanitized == expected, f"Expected {expected}, got {sanitized}"
-        print(f"✓ HTML injection blocked: '{original[:30]}...'")
+        preview = original[:30] + '...' if len(original) > 30 else original
+        print(f"✓ HTML injection blocked: '{preview}'")
 
 
 def test_representative_templates():

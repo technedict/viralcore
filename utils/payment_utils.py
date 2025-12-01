@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 # Force requests/urllib3 to use IPv4 only
 urllib3_cn.HAS_IPV6 = False
 
+# Default display value for missing data
+DEFAULT_NOT_AVAILABLE = 'N/A'
+
 # -------------------------------
 # Crypto Deposit Addresses
 # -------------------------------
@@ -393,8 +396,8 @@ async def poll_bank_payment_status(
                     parse_mode='MarkdownV2'
                 )
             elif current_plan_type == "tg_automation":
-                safe_username = escape_markdown_v2(user_username if user_username else 'N/A')
-                safe_tx_ref = escape_markdown_v2(tx_ref if tx_ref else 'N/A')
+                safe_username = escape_markdown_v2(user_username if user_username else DEFAULT_NOT_AVAILABLE)
+                safe_tx_ref = escape_markdown_v2(tx_ref if tx_ref else DEFAULT_NOT_AVAILABLE)
                 admin_message = (
                     f" *NEW TELEGRAM AUTOMATION REQUEST\\!* \n\n"
                     f"User ID: `{user_id}`\n"

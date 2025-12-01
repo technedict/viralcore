@@ -129,13 +129,21 @@ def sanitize_html(text: str, preserve_allowed_tags: bool = True) -> str:
     if not isinstance(text, str):
         text = str(text)
     
+    # Security: Limit input length to prevent ReDoS attacks
+    MAX_HTML_LENGTH = 100000  # 100KB limit
+    if len(text) > MAX_HTML_LENGTH:
+        logger.warning(f"HTML input truncated from {len(text)} to {MAX_HTML_LENGTH} chars for security")
+        text = text[:MAX_HTML_LENGTH]
+    
     if not preserve_allowed_tags:
         # Escape all HTML entities
         return html_module.escape(text)
     
     # Preserve allowed tags while escaping others
-    # Pattern to match HTML tags
-    tag_pattern = re.compile(r'<(/?)(\w+)([^>]*)>')
+    # Note: This is a simplified HTML sanitization approach suitable for Telegram messages.
+    # For untrusted HTML content, consider using a dedicated library like bleach or html-sanitizer.
+    # Pattern to match HTML tags - uses non-greedy matching to prevent catastrophic backtracking
+    tag_pattern = re.compile(r'<(/?)(\w+)([^>]{0,1000})>')
     
     def replace_tag(match):
         is_closing = match.group(1)
@@ -157,9 +165,6 @@ def sanitize_html(text: str, preserve_allowed_tags: bool = True) -> str:
             return html_module.escape(match.group(0))
     
     result = tag_pattern.sub(replace_tag, text)
-    
-    # Escape any remaining < or > that aren't part of valid tags
-    # This is a simplified approach - in production you might want more thorough parsing
     
     return result
 
