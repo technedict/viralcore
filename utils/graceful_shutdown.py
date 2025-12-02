@@ -42,6 +42,59 @@ class GracefulShutdownManager:
         # stop polling/close httpx client gracefully before cancelling tasks.
         self.app: Optional[Any] = None
         
+        # Store the original exception handler so we can restore it if needed
+        self._original_exception_handler: Optional[callable] = None
+        
+    def _custom_exception_handler(self, loop: asyncio.AbstractEventLoop, context: dict):
+        """
+        Custom exception handler to suppress expected NetworkError/ReadError during shutdown.
+        These errors occur when polling tasks try to read from closed connections.
+        """
+        exception = context.get("exception")
+        message = context.get("message", "")
+        
+        # Check if this is a NetworkError or ReadError from telegram during shutdown
+        is_network_error = False
+        if exception is not None:
+            exception_str = str(exception)
+            exception_type = type(exception).__name__
+            # Check for telegram NetworkError, httpx.ReadError, or httpcore.ReadError
+            if self.shutdown_requested and (
+                "NetworkError" in exception_type or 
+                "ReadError" in exception_type or
+                "ReadError" in exception_str or
+                "NetworkError" in exception_str
+            ):
+                is_network_error = True
+                # Also check if it's from a polling task
+                task = context.get("task")
+                if task is not None:
+                    coro = task.get_coro()
+                    if coro and "polling_action_cb" in repr(coro):
+                        # This is expected during shutdown, suppress it
+                        logger.debug(f"Suppressed expected {exception_type} from polling task during shutdown")
+                        return
+        
+        # For other errors or if not during shutdown, use the original handler or default
+        if self._original_exception_handler is not None:
+            self._original_exception_handler(loop, context)
+        else:
+            # Default behavior: log the exception
+            loop.default_exception_handler(context)
+    
+    def install_exception_handler(self):
+        """Install custom exception handler to suppress expected shutdown errors."""
+        try:
+            loop = asyncio.get_running_loop()
+            self._loop = loop
+            # Save the original handler
+            self._original_exception_handler = loop.get_exception_handler()
+            # Install our custom handler
+            loop.set_exception_handler(self._custom_exception_handler)
+            logger.debug("Custom exception handler installed for graceful shutdown")
+        except RuntimeError:
+            logger.warning("No running loop found, cannot install exception handler yet")
+    
     def set_app(self, app: Any):
         """
         Attach the telegram.ext.Application instance so graceful shutdown
@@ -60,6 +113,8 @@ class GracefulShutdownManager:
             self._loop = loop
             if self.shutdown_event is None:
                 self.shutdown_event = asyncio.Event()
+            # Install the exception handler
+            self.install_exception_handler()
             logger.debug("GracefulShutdownManager: app attached and shutdown_event bound to running loop")
 
     def init_job_queue(self):

@@ -38,15 +38,16 @@ def clear_awaiting_flags(context: ContextTypes.DEFAULT_TYPE):
 def get_main_menu_text() -> str:
     """
     Returns the caption for the main menu.
+    Note: Special characters are escaped for MarkdownV2 parse mode.
     """
     return (
-        "👋 Welcome to Viral Core bot - Your gateway to organic marketing that matters!\n\n"
-        "Join the free channel for free X growth tips and updates: https://t.me/ViralCore_TG\n\n"
+        "👋 Welcome to Viral Core bot \\- Your gateway to organic marketing that matters\\!\n\n"
+        "Join the free channel for free X growth tips and updates: https://t\\.me/ViralCore\\_TG\n\n"
         "Use the buttons below to:\n"
         "• 📢 Select a service\n"
         "• 💳 Purchase more posts\n"
         "• 🤝 View your affiliate program\n"
-        "• 🛠️ View your balance)\n"
+        "• 🛠️ View your balance\n"
     )
 
 

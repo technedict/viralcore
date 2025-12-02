@@ -980,7 +980,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if img_path and os.path.isfile(img_path):
             await query.edit_message_media(
-                media=InputMediaPhoto(media=img_path, caption=reply_text_content),
+                media=InputMediaPhoto(media=img_path, caption=reply_text_content, parse_mode=ParseMode.MARKDOWN_V2),
                 reply_markup=InlineKeyboardMarkup(reply_keyboard)
             )
         else:

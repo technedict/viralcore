@@ -54,15 +54,16 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
         for uid, *_ in get_all_users():
             try:
                 if photo:
-                    # Send photo with caption
+                    # Send photo with caption (plain text, no markdown)
                     await context.bot.send_photo(
                         chat_id=uid, 
                         photo=photo,
-                        caption=text if text else None
+                        caption=text if text else None,
+                        parse_mode=None
                     )
                 else:
-                    # Send text only
-                    await context.bot.send_message(chat_id=uid, text=text)
+                    # Send text only (plain text, no markdown)
+                    await context.bot.send_message(chat_id=uid, text=text, parse_mode=None)
                 sent += 1
             except Exception as e:
                 logger.exception("Failed to broadcast to %s: %s", uid, e)

@@ -4,6 +4,7 @@
 import logging
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.constants import ParseMode
 from utils.db_utils import create_user, get_user
 from utils.menu_utils import get_main_menu_text, main_menu_keyboard
 from utils.config import APIConfig
@@ -51,6 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_photo(
         photo=APIConfig.MAIN_MENU_IMAGE,
         caption=get_main_menu_text(),
+        parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=InlineKeyboardMarkup(main_menu_keyboard(is_admin))
     )
 
