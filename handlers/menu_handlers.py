@@ -282,7 +282,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ... (existing affiliate, service_balance, support handlers - no changes needed) ...
 
     elif data == "service_menu":
-        reply_text_content = "Please select one of the service plan categories:"
+        reply_text_content = "Please select one of the service plan categories\\:"
         reply_keyboard = [
             [InlineKeyboardButton("Twitter/X", callback_data="x_plans")],
             [InlineKeyboardButton("Telegram", callback_data="tg_plans")],
@@ -406,7 +406,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("x_poll", None) # Ensure X poll is off if it was set
         context.user_data.pop("tier", None) # Clear tier from previous X engagement
 
-        reply_text_content = "X Service Plans:\n\n"
+        reply_text_content = "X Service Plans\:\n\n"
         reply_keyboard = [
             [InlineKeyboardButton("Engagement", callback_data="engagement_plans_x")],
             [InlineKeyboardButton("Followers", callback_data="followers_plans_x")], # This is the new entry point
@@ -421,8 +421,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["x_engagement"] = True # Set flag for X engagement plans current_plan_type
         # context.user_data.pop("tier", None) # Let this be handled by x_tier_ callbacks
         reply_text_content = (
-            "X Service Plans:\n\n"
-            "Select a Tier after choosing your preferred plan:"
+            "X Service Plans\:\n\n"
+            "Select a Tier after choosing your preferred plan\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Tier 1 Engagement", callback_data="x_tier_t1")],
@@ -554,7 +554,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("tg_extra_plans", None)
         context.user_data.pop("x_poll", None)
 
-        reply_text_content = "Telegram Service Plans:\n\n"
+        reply_text_content = "Telegram Service Plans\:\n\n"
         reply_keyboard = [
             [InlineKeyboardButton("Engagement", callback_data="engagement_plans_tg")],
             [InlineKeyboardButton("Premium Members", callback_data="premium_plans_tg")],
@@ -655,7 +655,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "confirm_amount": # This is for X Engagement tiers after "✅ Yes"
         # The 'tier' should already be in context.user_data from x_tier_ callback
-        reply_text_content = "Please select the number of posts you would like to purchase:"
+        reply_text_content = "Please select the number of posts you would like to purchase\:"
         reply_keyboard = [
             [InlineKeyboardButton("10", callback_data="qty_x_engagement_10"), # Change callback for clarity
              InlineKeyboardButton("25", callback_data="qty_x_engagement_25")],
@@ -669,7 +669,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("tgc_"): # TG engagement comment quantity selected
         tqty = int(data.split("_", 1)[1])
         context.user_data["tqty"] = tqty
-        reply_text_content = "Please select the number of posts you would like to purchase:"
+        reply_text_content = "Please select the number of posts you would like to purchase\:"
         reply_keyboard = [
             # First row: 10 and 25
             [
@@ -721,17 +721,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if data == "custom_quantity_poll":
             context.user_data["custom_plan_type"] = "x_poll" # Store specific plan type for message handler
-            reply_text_content = "Enter custom number of *Votes* (min 10):"
+            reply_text_content = "Enter custom number of *Votes* \(min 10\)\:"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="poll_plans_x")]]
             current_slide_key = "custom_quantity_input_poll"
         elif data == "custom_quantity_tg_custom": # Corrected name
             context.user_data["custom_plan_type"] = "tg_custom"
-            reply_text_content = "Enter custom number of *posts* for TG engagement (min 10):"
+            reply_text_content = "Enter custom number of *posts* for TG engagement \(min 10\)\:"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data=f"tgc_{context.user_data.get('tqty', '')}")]]
             current_slide_key = "custom_quantity_input_tg"
         elif data == "custom_quantity_x_engagement": # Corrected name
             context.user_data["custom_plan_type"] = "x_engagement"
-            reply_text_content = "Enter custom number of *posts* for X engagement (min 10):"
+            reply_text_content = "Enter custom number of *posts* for X engagement \(min 10\)\:"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="confirm_amount")]]
             current_slide_key = "custom_quantity_input_x"
         elif data == "custom_quantity_direct_add": # New custom quantity for Direct Add
@@ -770,14 +770,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = get_total_amount(user_id)
         daily_posts = get_user_daily_posts(user_id)
 
-        daily_breakdown_lines = [f"{day}: {count} replies" for day, count in daily_posts]
+        daily_breakdown_lines = [f"{day}\\: {count} replies" for day, count in daily_posts]
         daily_breakdown_string = "\n".join(daily_breakdown_lines)
+        
+        # Escape the amount for MarkdownV2
+        escaped_amount = escape_markdown_v2(f"{amount:,.2f}")
 
         reply_text_content = (
-            "Full Breakdown:\n\n"
+            "Full Breakdown\\:\n\n"
             f"{daily_breakdown_string}\n\n"
-            f"Total Replies: *{replies}*\n"
-            f"Total Amount: *₦{amount:,.2f}*"
+            f"Total Replies\\: *{replies}*\n"
+            f"Total Amount\\: *₦{escaped_amount}*"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Withdraw", callback_data="withdraw")],
@@ -789,7 +792,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "submit_replies":
         context.user_data["submit_replies_order"] = True
-        reply_text_content = f"Enter the Number of replies and Day for submission. Format: (No. of replies, Day of the week):"
+        reply_text_content = f"Enter the Number of replies and Day for submission\. Format\: \(No\. of replies, Day of the week\)\:"
         reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="reply_guys_panel")]]
         current_slide_key = "submit_replies_amount"
         
@@ -823,7 +826,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_slide_key = data
 
     elif data == "payment_crypto":
-        reply_text_content = "Choose cryptocurrency:"
+        reply_text_content = "Choose cryptocurrency\:"
         reply_keyboard = [
             [InlineKeyboardButton("USDT", callback_data="usdt")],
             [InlineKeyboardButton("BNB", callback_data="bsc"),
@@ -836,7 +839,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_slide_key = "payment_crypto"
 
     elif data == "usdt":
-        reply_text_content = "Select USDT network:"
+        reply_text_content = "Select USDT network\:"
         reply_keyboard = [
             [InlineKeyboardButton("BEP20", callback_data="usdt_bep20")],
             [InlineKeyboardButton("TRC20", callback_data="usdt_trc20")],
@@ -854,7 +857,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif data == "payment_bank":
-        reply_text_content = "Select bank currency:"
+        reply_text_content = "Select bank currency\:"
         reply_keyboard = [
             [InlineKeyboardButton("NGN", callback_data="bank_ngn")],
             # Back button needs to be dynamic
@@ -877,7 +880,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Logic to return to the appropriate quantity selection menu
         if plan_type_from_back == "x_engagement":
-            reply_text_content = "Please select the number of posts you would like to purchase:"
+            reply_text_content = "Please select the number of posts you would like to purchase\:"
             reply_keyboard = [
                 [InlineKeyboardButton("10", callback_data="qty_x_engagement_10"),
                  InlineKeyboardButton("25", callback_data="qty_x_engagement_25")],
@@ -889,9 +892,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_slide_key = "confirm_amount_selection" # This is the slide key for X engagement quantity
         elif plan_type_from_back == "x_poll":
             reply_text_content = (
-                "Twitter Poll Plan:\n\n"
-                "$0.3 per 10 VOTES"
-                "\n\nPlease select the number of Votes you would like to purchase:"
+                "Twitter Poll Plan\:\n\n"
+                "$0\.3 per 10 VOTES"
+                "\n\nPlease select the number of Votes you would like to purchase\:"
             )
             reply_keyboard = [
                 [InlineKeyboardButton("10", callback_data="qty_poll_10"),
@@ -904,7 +907,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_slide_key = "poll_plans_x"
         elif plan_type_from_back == "tg_custom":
             tqty = context.user_data.get('tqty', 0) # Retain the tqty if possible
-            reply_text_content = "Please select the number of posts you would like to purchase:"
+            reply_text_content = "Please select the number of posts you would like to purchase\:"
             reply_keyboard = [
                 [InlineKeyboardButton("10", callback_data="qty_tg_custom_10"),
                  InlineKeyboardButton("25", callback_data="qty_tg_custom_25")],
