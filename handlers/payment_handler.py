@@ -559,144 +559,174 @@ class PaymentHandler:
     # These are mostly provided by the user, so ensuring they use APIConfig.XYZ_API_KEY
     # and handle exceptions gracefully.
 
+    # BSC USDT (BEP20) contract address
+    BSC_USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955"
     
     def _check_bsc(self, tx_hash: str, wallet: str, expected_amount_usd: float, now: int, max_age: int, expected_token: Optional[str], token_decimals: int = 18) -> Dict[str, Any]:
-        """Check transaction on Binance Smart Chain (BSC)."""
-        url = "https://api.etherscan.io/v2/api?chainid=56"
+        """Check transaction on Binance Smart Chain (BSC) using public RPC."""
+        # Use BSC public RPC endpoint (no API key required)
+        rpc_url = "https://bsc-dataseed.binance.org/"
         
         # Normalize wallet address for comparison
         wallet_normalized = self._normalize_address(wallet, "bnb")
         tx_hash_normalized = tx_hash.lower().strip()
         
-        # For USDT BEP20, action is 'tokentx' and address is the wallet itself (looking for incoming token transfers)
-        # For native BNB, action is 'txlist'
-        if expected_token == "USDT":
-            params = {
-                "module": "account",
-                "action": "tokentx",
-                "address": wallet,
-                "page": 1,
-                "offset": 10, # Check recent transactions
-                "sort": "desc",
-                "apikey": APIConfig.BSC_API_KEY # Use APIConfig
-            }
-        else: # Native BNB
-            params = {
-                "module": "account",
-                "action": "txlist",
-                "address": wallet,
-                "page": 1,
-                "offset": 10,
-                "sort": "desc",
-                "apikey": APIConfig.BSC_API_KEY # Use APIConfig
-            }
+        # Ensure tx_hash has 0x prefix
+        if not tx_hash_normalized.startswith("0x"):
+            tx_hash_normalized = "0x" + tx_hash_normalized
 
         max_retries = 3
-        delay_seconds = 15 # Delay between retries
+        delay_seconds = 15
 
         for attempt in range(max_retries):
             logger.debug(f"Attempt {attempt + 1}/{max_retries} to check BSC transaction for hash: {tx_hash}")
             try:
-                response = self.session.get(url, params=params, timeout=15) # Increased timeout slightly
-                response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+                # Get transaction details via RPC
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "eth_getTransactionByHash",
+                    "params": [tx_hash_normalized]
+                }
+                response = self.session.post(rpc_url, json=payload, timeout=15)
+                response.raise_for_status()
                 data = response.json()
-
-                if data.get("status") == "1":
-                    transactions = data.get("result", [])
-                    logger.info(f"Received {len(transactions)} transactions from BSCScan for wallet {wallet}")
-
-                    # Flag to know if a matching transaction was found in this attempt
-                    found_matching_tx = False
-                    for tx in transactions:
-                        # Filter for incoming transactions to our wallet
-                        current_tx_hash = tx.get("hash", "").lower().strip()
-                        current_tx_to_address = self._normalize_address(tx.get("to", ""), "bnb")
-
-                        logger.debug(f"Comparing: {current_tx_hash} == {tx_hash_normalized} and {current_tx_to_address} == {wallet_normalized}")
-
-                        if current_tx_hash == tx_hash_normalized and current_tx_to_address == wallet_normalized:
-                            found_matching_tx = True
-                            # For token transfers, ensure it's the expected token
-                            # USDT on BSC can be "USDT", "BSC-USD", or other variations depending on the token contract
-                            if expected_token == "USDT":
-                                token_symbol = tx.get("tokenSymbol", "").upper()
-                                # Accept common USDT symbols on BSC
-                                if token_symbol not in ["USDT", "BSC-USD", "USD"]:
-                                    logger.warning(f"Found transaction with matching hash but unexpected token symbol: {token_symbol} (expected USDT variants)")
-                                    continue # Skip if not USDT, continue looking for others in the list
-
-                            # Value is typically in smallest unit (e.g., wei for ETH/BNB, or 10^decimals for tokens)
-                            tx_value_raw = int(tx.get("value", 0))
-                            # Use the correct `token_decimals` for conversion
-                            value_converted_crypto = tx_value_raw / (10 ** token_decimals)
-
-                            # Time check
-                            tx_timestamp_unix = int(tx.get("timeStamp", 0))
-                            if (now - tx_timestamp_unix) // 60 > max_age:
-                                return {"status": "expired", "message": "Transaction is too old."}
-
-                            # Amount check (convert received crypto value to USD if needed)
-                            # For USDT, value_converted_crypto is already USD equivalent.
-                            if expected_token == "USDT":
-                                received_amount_usd = value_converted_crypto
-                            else:
-                                # Convert native BNB amount to USD
-                                received_amount_usd = convert_crypto_to_usd(value_converted_crypto, APIConfig.COINGECKO_IDS["bnb"])
-                                if received_amount_usd is None:
-                                    return {"status": "error", "message": "Could not get current BNB price."}
-
-                            # Allow for slight variations (e.g., network fees affecting final received amount)
-                            # We use 0.5 USD tolerance for both min and max around the expected USD amount
-                            tolerance = 0.5
-                            if not (expected_amount_usd - tolerance <= received_amount_usd <= expected_amount_usd + tolerance):
-                                return {"status": "failed_amount", "message": f"Received amount ${received_amount_usd:.2f} USD does not match expected range (${expected_amount_usd-tolerance:.2f}-${expected_amount_usd+tolerance:.2f} USD)."}
-
-                            logger.info(f"Transaction {tx_hash} successfully found and verified.")
-                            return {
-                                "status": "success",
-                                "transaction": {
-                                    "from": tx.get("from"),
-                                    "to": tx.get("to"),
-                                    "value": value_converted_crypto, # The amount in crypto units
-                                    "value_usd": received_amount_usd, # The amount in USD equivalent
-                                    "hash": tx.get("hash"),
-                                    "timestamp": tx.get("timeStamp"),
-                                    "tokenSymbol": tx.get("tokenSymbol", expected_token),
-                                    "tokenName": tx.get("tokenName", "")
-                                }
-                            }
-                    # If loop finishes and no matching transaction was found in this attempt
-                    if not found_matching_tx and attempt < max_retries - 1:
-                        logger.info(f"Transaction {tx_hash} not found on attempt {attempt + 1}. Retrying in {delay_seconds} seconds...")
-                        time.sleep(delay_seconds)
-                        continue # Go to the next attempt
-                    elif not found_matching_tx and attempt == max_retries - 1:
-                        logger.warning(f"Transaction {tx_hash} not found after {max_retries} attempts.")
-                        return {"status": "not_found", "message": "No matching incoming transaction found on BSCScan after multiple attempts."}
-                else: # API status is not "1"
+                
+                tx = data.get("result")
+                if not tx:
                     if attempt < max_retries - 1:
-                        logger.warning(f"BSCScan API returned status {data.get('status')} and message: {data.get('message')}. Retrying in {delay_seconds} seconds...")
+                        logger.info(f"Transaction {tx_hash} not found on attempt {attempt + 1}. Retrying in {delay_seconds} seconds...")
                         time.sleep(delay_seconds)
                         continue
                     else:
-                        logger.error(f"BSCScan API returned status {data.get('status')} and message: {data.get('message')} after {max_retries} attempts.")
-                        return {"status": "error", "message": data.get("message", "Failed to fetch BSCScan data after multiple attempts.")}
+                        return {"status": "not_found", "message": "Transaction not found on BSC network."}
+                
+                # Get transaction receipt to check if it was successful
+                receipt_payload = {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "eth_getTransactionReceipt",
+                    "params": [tx_hash_normalized]
+                }
+                receipt_response = self.session.post(rpc_url, json=receipt_payload, timeout=15)
+                receipt_data = receipt_response.json()
+                receipt = receipt_data.get("result")
+                
+                if not receipt:
+                    if attempt < max_retries - 1:
+                        logger.info(f"Transaction {tx_hash} receipt not ready. Retrying in {delay_seconds} seconds...")
+                        time.sleep(delay_seconds)
+                        continue
+                    else:
+                        return {"status": "pending", "message": "Transaction is still pending confirmation."}
+                
+                # Check if transaction was successful (status = 0x1)
+                if receipt.get("status") != "0x1":
+                    return {"status": "failed", "message": "Transaction failed on the blockchain."}
+                
+                # Get block for timestamp
+                block_payload = {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "eth_getBlockByNumber",
+                    "params": [tx.get("blockNumber"), False]
+                }
+                block_response = self.session.post(rpc_url, json=block_payload, timeout=15)
+                block_data = block_response.json()
+                block = block_data.get("result", {})
+                tx_timestamp = int(block.get("timestamp", "0x0"), 16)
+                
+                # Time check
+                if (now - tx_timestamp) // 60 > max_age:
+                    return {"status": "expired", "message": "Transaction is too old."}
+                
+                # Check if it's a token transfer (USDT) or native BNB
+                if expected_token == "USDT":
+                    # For USDT, check the logs for Transfer event
+                    logs = receipt.get("logs", [])
+                    usdt_contract = self.BSC_USDT_CONTRACT.lower()
+                    
+                    for log in logs:
+                        contract_address = log.get("address", "").lower()
+                        if contract_address == usdt_contract:
+                            # Transfer event topic
+                            topics = log.get("topics", [])
+                            if len(topics) >= 3 and topics[0] == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef":
+                                # topics[2] is the 'to' address (padded to 32 bytes)
+                                to_address = "0x" + topics[2][-40:]
+                                if to_address.lower() == wallet_normalized:
+                                    # Get value from log data
+                                    value_hex = log.get("data", "0x0")
+                                    tx_value_raw = int(value_hex, 16)
+                                    value_converted_crypto = tx_value_raw / (10 ** token_decimals)
+                                    received_amount_usd = value_converted_crypto  # USDT = USD
+                                    
+                                    tolerance = 0.5
+                                    if not (expected_amount_usd - tolerance <= received_amount_usd <= expected_amount_usd + tolerance):
+                                        return {"status": "failed_amount", "message": f"Received amount ${received_amount_usd:.2f} USD does not match expected range (${expected_amount_usd-tolerance:.2f}-${expected_amount_usd+tolerance:.2f} USD)."}
+                                    
+                                    logger.info(f"Transaction {tx_hash} successfully verified (USDT BEP20).")
+                                    return {
+                                        "status": "success",
+                                        "transaction": {
+                                            "from": tx.get("from"),
+                                            "to": wallet,
+                                            "value": value_converted_crypto,
+                                            "value_usd": received_amount_usd,
+                                            "hash": tx_hash_normalized,
+                                            "timestamp": str(tx_timestamp),
+                                            "tokenSymbol": "USDT",
+                                            "tokenName": "Tether USD"
+                                        }
+                                    }
+                    
+                    return {"status": "not_found", "message": "No USDT transfer to your wallet found in this transaction."}
+                else:
+                    # Native BNB transfer
+                    to_address = self._normalize_address(tx.get("to", ""), "bnb")
+                    if to_address != wallet_normalized:
+                        return {"status": "not_found", "message": "Transaction recipient does not match deposit wallet."}
+                    
+                    tx_value_raw = int(tx.get("value", "0x0"), 16)
+                    value_converted_crypto = tx_value_raw / (10 ** 18)  # BNB has 18 decimals
+                    
+                    # Convert BNB to USD
+                    received_amount_usd = convert_crypto_to_usd(value_converted_crypto, APIConfig.COINGECKO_IDS["bnb"])
+                    if received_amount_usd is None:
+                        return {"status": "error", "message": "Could not get current BNB price."}
+                    
+                    tolerance = 0.5
+                    if not (expected_amount_usd - tolerance <= received_amount_usd <= expected_amount_usd + tolerance):
+                        return {"status": "failed_amount", "message": f"Received amount ${received_amount_usd:.2f} USD does not match expected range (${expected_amount_usd-tolerance:.2f}-${expected_amount_usd+tolerance:.2f} USD)."}
+                    
+                    logger.info(f"Transaction {tx_hash} successfully verified (native BNB).")
+                    return {
+                        "status": "success",
+                        "transaction": {
+                            "from": tx.get("from"),
+                            "to": tx.get("to"),
+                            "value": value_converted_crypto,
+                            "value_usd": received_amount_usd,
+                            "hash": tx_hash_normalized,
+                            "timestamp": str(tx_timestamp),
+                            "tokenSymbol": "BNB",
+                            "tokenName": "BNB"
+                        }
+                    }
 
             except requests.exceptions.RequestException as e:
                 if attempt < max_retries - 1:
-                    logger.warning(f"BSCScan API request failed on attempt {attempt + 1}: {e}. Retrying in {delay_seconds} seconds...")
+                    logger.warning(f"BSC RPC request failed on attempt {attempt + 1}: {e}. Retrying in {delay_seconds} seconds...")
                     time.sleep(delay_seconds)
                     continue
                 else:
-                    logger.error(f"BSCScan API request failed after {max_retries} attempts: {e}")
-                    return {"status": "api_error", "message": f"Network error contacting BSCScan after multiple attempts: {str(e)}"}
+                    logger.error(f"BSC RPC request failed after {max_retries} attempts: {e}")
+                    return {"status": "api_error", "message": f"Network error contacting BSC network: {str(e)}"}
             except Exception as e:
                 logger.error(f"Error processing BSC transaction: {e}", exc_info=True)
-                # For general unexpected errors, we might not want to retry as it might be a code issue
                 return {"status": "internal_error", "message": f"Internal error during BSC verification: {str(e)}"}
 
-        # This part should theoretically not be reached if all returns are handled within the loop,
-        # but it's a fallback if all retries fail without a specific return.
+        return {"status": "not_found", "message": "No matching transaction found after all retries."}
         return {"status": "not_found", "message": "No matching incoming transaction found on BSCScan after all retries."}
 
     def _check_solana(self, tx_hash: str, wallet: str, expected_amount_usd: float, now: int, max_age: int, expected_token: Optional[str]) -> Dict[str, Any]:

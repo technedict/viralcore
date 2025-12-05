@@ -108,8 +108,9 @@ async def _process_quantity_and_set_next_step(
         unit_price = 0.02 # $0.1 per 5 comments -> $0.02 per 1 comment
         total_cost = (tqty * unit_price) * qty
         context.user_data["tqty"] = tqty # Ensure tqty is stored if it's dynamic
+        escaped_total = escape_markdown_v2(f"${total_cost:.2f}")
         text = (
-            f"For {qty} posts with {tqty} comments each at $0.1 per 5 comments, your total is ${total_cost:.2f}\n\n"
+            f"For {qty} posts with {tqty} comments each at $0\.1 per 5 comments, your total is {escaped_total}\n\n"
             "Proceed to payment?"
         )
         keyboard = [
@@ -122,8 +123,9 @@ async def _process_quantity_and_set_next_step(
         unit_price = 0.03 # $0.3 per 10 Votes -> $0.03 per vote
         total_cost = qty * unit_price
         # Now, direct to payment first
+        escaped_total = escape_markdown_v2(f"${total_cost:.2f}")
         text = (
-            f"You've selected {qty} Votes at $0.3 per 10 Votes, totaling ${total_cost:.2f}.\n\n"
+            f"You've selected {qty} Votes at $0\.3 per 10 Votes, totaling {escaped_total}\.\n\n"
             "Proceed to payment?"
         )
         keyboard = [
@@ -138,8 +140,10 @@ async def _process_quantity_and_set_next_step(
             return None, None, None
         unit_price = APIConfig.TIER_DETAILS[tier_name]["price"]
         total_cost = qty * unit_price
+        escaped_unit = escape_markdown_v2(f"${unit_price:.2f}")
+        escaped_total = escape_markdown_v2(f"${total_cost:.2f}")
         text = (
-            f"For {qty} posts at ${unit_price:.2f} per post, your total is ${total_cost:.2f}\n\n"
+            f"For {qty} posts at {escaped_unit} per post, your total is {escaped_total}\n\n"
             "Proceed to payment?"
         )
         keyboard = [
@@ -157,9 +161,11 @@ async def _process_quantity_and_set_next_step(
         # Price is per 1k followers, so adjust unit price
         unit_price_per_follower = APIConfig.FOLLOWER_DETAILS["direct_add"]["price_per_k"] / 1000
         total_cost = qty * unit_price_per_follower
+        escaped_price = escape_markdown_v2(f"${APIConfig.FOLLOWER_DETAILS['direct_add']['price_per_k']:.2f}")
+        escaped_total = escape_markdown_v2(f"${total_cost:.2f}")
         text = (
-            f"You've selected {qty} Direct Add Followers at ${APIConfig.FOLLOWER_DETAILS['direct_add']['price_per_k']:.2f} per 1k, "
-            f"totaling ${total_cost:.2f}.\n\nProceed to payment?"
+            f"You've selected {qty} Direct Add Followers at {escaped_price} per 1k, "
+            f"totaling {escaped_total}\.\n\nProceed to payment?"
         )
         keyboard = [
             [InlineKeyboardButton("Crypto", callback_data="payment_crypto"),
@@ -182,9 +188,11 @@ async def _process_quantity_and_set_next_step(
         # Price is per 10 followers
         unit_price_per_follower = APIConfig.FOLLOWER_DETAILS["slow_push"]["price_per_10"] / 10
         total_cost = qty * unit_price_per_follower
+        escaped_price = escape_markdown_v2(f"${APIConfig.FOLLOWER_DETAILS['slow_push']['price_per_10']:.2f}")
+        escaped_total = escape_markdown_v2(f"${total_cost:.2f}")
         text = (
-            f"You've selected {qty} Slow Push Followers at ${APIConfig.FOLLOWER_DETAILS['slow_push']['price_per_10']:.2f} per 10, "
-            f"totaling ${total_cost:.2f}. Enter amount of days to push (1-200):\n\n"
+            f"You've selected {qty} Slow Push Followers at {escaped_price} per 10, "
+            f"totaling {escaped_total}\. Enter amount of days to push \(1\-200\)\:\n\n"
         )
         context.user_data["awaiting_slow_push_input"] = True # Flag for message handler
         keyboard = [
@@ -205,9 +213,10 @@ async def _process_quantity_and_set_next_step(
         # Price is per 10 followers
         unit_price_per_follower = 3.5 / 50
         total_cost = qty * unit_price_per_follower
+        escaped_total = escape_markdown_v2(f"${total_cost:.2f}")
         text = (
-            f"You've selected {qty} Premium Members at $3.5 per 50, "
-            f"totaling ${total_cost:.2f}.\n\nProceed to payment?"
+            f"You've selected {qty} Premium Members at $3\.5 per 50, "
+            f"totaling {escaped_total}\.\n\nProceed to payment?"
         )
         keyboard = [
             [InlineKeyboardButton("Crypto", callback_data="payment_crypto"),
@@ -282,7 +291,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ... (existing affiliate, service_balance, support handlers - no changes needed) ...
 
     elif data == "service_menu":
-        reply_text_content = "Please select one of the service plan categories\\:"
+        reply_text_content = "Please select one of the service plan categories\\\\.:"
         reply_keyboard = [
             [InlineKeyboardButton("Twitter/X", callback_data="x_plans")],
             [InlineKeyboardButton("Telegram", callback_data="tg_plans")],
@@ -306,7 +315,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reply_text_content = (
             f"🤝 *Affiliate Program*\n\n"
-            f"Share your referral link to earn commissions on new purchases\\!\n"
+            f"Share your referral link to earn commissions on new purchases\\\\!\n"
             f"Your referral link: `https://t\\.me/{escape_markdown_v2(context.bot.username)}?start=ref_{user_id}`\n\n"
             f"You have referred *{total_referrals}* users\\.\n"
             f"{referrer_msg}\n\n"
@@ -350,7 +359,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             f"💰 *My Balance & Engagements*\n\n"
             f"📊 *Posts Left:*\n"
-            f"🐦 X \\(Twitter\\): {total_x_posts} posts\n"
+            f"🐦 X \\\\(Twitter\\\\): {total_x_posts} posts\n"
             f"✈️ Telegram: {total_tg_posts} posts\n\n"
             f"💸 *Affiliate Balance:* ${escaped_balance}\n"
         )
@@ -374,7 +383,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "task_to_earn_menu":
         reply_text_content = (
             f"✅ *Task 2 Earn*\n\n"
-            f"This section is under development\\. Soon you'll be able to earn credits by completing simple tasks\\!"
+            f"This section is under development\\. Soon you'll be able to earn credits by completing simple tasks\\\\!"
         )
         reply_keyboard  = [
             # Add task-specific buttons here if needed later
@@ -390,9 +399,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             f"ℹ️ *Support*\n\n"
             f"If you have any questions or encounter issues, please contact our support team:\n"
-            f"\\- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
-            f"\\- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
-            f"We are here to help you\\!"
+            f"\\\\- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
+            f"\\\\- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
+            f"We are here to help you\\\\!"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Join Support Channel", url=support_channel_link)],
@@ -445,8 +454,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("tier", None) # For engagement tiers
 
         reply_text_content = (
-            "X Follower Plans:\n\n"
-            "Select a plan:"
+            "X Follower Plans\:\n\n"
+            "Select a plan\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Direct Add", callback_data="direct_add_select_qty")], # New callback
@@ -459,11 +468,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "direct_add_select_qty": # New handler for Direct Add quantity
         # Set relevant flags or context for direct add
         context.user_data["current_plan_type"] = "direct_add"
+        escaped_price = escape_markdown_v2(f"${APIConfig.FOLLOWER_DETAILS['direct_add']['price_per_k']:.2f}")
         reply_text_content = (
-            f"Direct Add Followers:\n\n"
-            f"Price: ${APIConfig.FOLLOWER_DETAILS['direct_add']['price_per_k']:.2f} per 1000 followers.\n"
-            f"Minimum: {APIConfig.FOLLOWER_DETAILS['direct_add']['min_qty']} followers.\n\n"
-            "Please select the number of followers you would like to purchase:"
+            f"Direct Add Followers\:\n\n"
+            f"Price\: {escaped_price} per 1000 followers\.\n"
+            f"Minimum\: {APIConfig.FOLLOWER_DETAILS['direct_add']['min_qty']} followers\.\n\n"
+            "Please select the number of followers you would like to purchase\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("1,000", callback_data="qty_direct_add_1000")],
@@ -478,11 +488,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "slow_push_select_qty": # New handler for Slow Push quantity
         # Set relevant flags or context for slow push
         context.user_data["current_plan_type"] = "slow_push"
+        escaped_price = escape_markdown_v2(f"${APIConfig.FOLLOWER_DETAILS['slow_push']['price_per_10']:.2f}")
         reply_text_content = (
-            f"Slow Push Followers:\n\n"
-            f"Price: ${APIConfig.FOLLOWER_DETAILS['slow_push']['price_per_10']:.2f} per 10 followers.\n"
-            f"Minimum: {APIConfig.FOLLOWER_DETAILS['slow_push']['min_qty']} followers (in multiples of 10).\n\n"
-            "Please select the number of followers you would like to purchase:"
+            f"Slow Push Followers\:\n\n"
+            f"Price\: {escaped_price} per 10 followers\.\n"
+            f"Minimum\: {APIConfig.FOLLOWER_DETAILS['slow_push']['min_qty']} followers \(in multiples of 10\)\.\n\n"
+            "Please select the number of followers you would like to purchase\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("100", callback_data="qty_slow_push_100")],
@@ -499,9 +510,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         support_link = f"https://t.me/{support_username}"
 
         reply_text_content = (
-            "This method publishes a giveaway ad for you on X with the task to follow your account.\n\n"
-            "All followers are organic and are from real and active users.\n\n"
-            "To discuss the pricing and specific details please tap the button to contact support."
+            "This method publishes a giveaway ad for you on X with the task to follow your account\.\n\n"
+            "All followers are organic and are from real and active users\.\n\n"
+            "To discuss the pricing and specific details please tap the button to contact support\."
         )
         reply_keyboard = [
             [InlineKeyboardButton("Contact Support Directly", url=support_link)],
@@ -517,9 +528,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # context.user_data.pop("tg_custom", None) # Not needed as _process_quantity handles specific flags
 
         reply_text_content = (
-            "Twitter Poll Plan:\n\n"
-            "$0.3 per 10 VOTES"
-            "\n\nPlease select the number of Votes you would like to purchase:"
+            "Twitter Poll Plan\:\n\n"
+            "$0\.3 per 10 VOTES"
+            "\n\nPlease select the number of Votes you would like to purchase\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("10", callback_data="qty_x_poll_10"),
@@ -535,7 +546,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["special_plans"] = True
         reply_text_content = (
             "X Specific Plans\n\n"
-            "Need extra metrics like: likes, comments, profile clicks, link clicks, detail expands, views, impressions, reposts and more."
+            "Need extra metrics like\: likes, comments, profile clicks, link clicks, detail expands, views, impressions, reposts and more\."
         )
         support_username = "ViralCore_Support"
         support_link = f"https://t.me/{support_username}"
@@ -568,9 +579,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["tg_engagement"] = True
         context.user_data.pop("tqty", None)
         reply_text_content = (
-            "Telegram Engagement Plan:\n\n"
-            "$0.1 per 5 COMMENTS, reactions inclusive"
-            "\n\nPlease select the number of COMMENTS you would like to purchase:"
+            "Telegram Engagement Plan\:\n\n"
+            "$0\.1 per 5 COMMENTS, reactions inclusive"
+            "\n\nPlease select the number of COMMENTS you would like to purchase\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("5", callback_data="tgc_5"),
@@ -590,7 +601,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             "Telegram Automation\n\n"
             "Get a personal bot that constantly monitors your channel for new posts and automatically submits them for raiding"
-            "\n\nAt $10 per month. Proceed to payment?"
+            "\n\nAt $10 per month\. Proceed to payment?"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Crypto", callback_data="payment_crypto"),
@@ -607,7 +618,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             "Telegram Premium Members and Views\n\n"
             "Get Premium members to join your channel and consistently view over the next 200 days"
-            "\n\nAt $3.5 per 50 members, reply with the number of MEMBERS you would like to purchase (Min: 50):"
+            "\n\nAt $3\.5 per 50 members, reply with the number of MEMBERS you would like to purchase \(Min\: 50\)\:"
         )
         reply_keyboard = [
             [InlineKeyboardButton("⬅️ Back", callback_data="tg_plans")]
@@ -618,7 +629,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["tg_extra_plans"] = True
         reply_text_content = (
             "Telegram Extra Plans\n\n"
-            "Need specific likes, comments, views, new members, and more."
+            "Need specific likes, comments, views, new members, and more\."
         )
         support_username = "ViralCore_Support"
         support_link = f"https://t.me/{support_username}"
@@ -631,8 +642,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "custom_order":
         reply_text_content = (
-            "Please Contact Support to meet your requirements:\n\n"
-            "@ViralCore\\_Support on Telegram\n"
+            "Please Contact Support to meet your requirements\:\n\n"
+            "@ViralCore\\\\_Support on Telegram\n"
         )
         reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="main_menu")]]
         current_slide_key = "custom_order_contact"
@@ -641,10 +652,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tier = data.split("_", 2)[2]
         context.user_data["tier"] = tier # Store the selected tier
         details = APIConfig.TIER_DETAILS[tier]
+        escaped_price = escape_markdown_v2(f"${details['price']:.2f}")
+        escaped_description = escape_markdown_v2(details['description'])
         reply_text_content = (
             f"*Tier {tier.upper()} Selected*\n\n"
-            f"{details['description']}\n"
-            f"Price: *${details['price']:.2f}* per post\n\n"
+            f"{escaped_description}\n"
+            f"Price\: *{escaped_price}* per post\n\n"
             "Confirm?"
         )
         reply_keyboard = [
@@ -737,21 +750,21 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "custom_quantity_direct_add": # New custom quantity for Direct Add
             context.user_data["custom_plan_type"] = "direct_add"
             reply_text_content = (
-                f"Enter custom number of *Direct Add Followers* (min {APIConfig.FOLLOWER_DETAILS['direct_add']['min_qty']}):"
+                f"Enter custom number of *Direct Add Followers* \(min {APIConfig.FOLLOWER_DETAILS['direct_add']['min_qty']}\)\:"
             )
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="direct_add_select_qty")]]
             current_slide_key = "custom_quantity_input_direct_add"
         elif data == "custom_quantity_slow_push": # New custom quantity for Slow Push
             context.user_data["custom_plan_type"] = "slow_push"
             reply_text_content = (
-                f"Enter custom number of *Slow Push Followers* (min {APIConfig.FOLLOWER_DETAILS['slow_push']['min_qty']}, in multiples of 10):"
+                f"Enter custom number of *Slow Push Followers* \(min {APIConfig.FOLLOWER_DETAILS['slow_push']['min_qty']}, in multiples of 10\)\:"
             )
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="slow_push_select_qty")]]
             current_slide_key = "custom_quantity_input_slow_push"
         elif data == "custom_premium_quantity_order": # For TG Premium Members
             context.user_data["custom_plan_type"] = "tg_premium"
             reply_text_content = (
-                f"Enter custom number of *Telegram Premium Members* (min 50):"
+                f"Enter custom number of *Telegram Premium Members* \(min 50\)\:"
             )
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="premium_plans_tg")]]
             current_slide_key = "custom_quantity_input_tg_premium"
@@ -770,17 +783,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = get_total_amount(user_id)
         daily_posts = get_user_daily_posts(user_id)
 
-        daily_breakdown_lines = [f"{day}\\: {count} replies" for day, count in daily_posts]
+        daily_breakdown_lines = [f"{day}\\\\.: {count} replies" for day, count in daily_posts]
         daily_breakdown_string = "\n".join(daily_breakdown_lines)
         
         # Escape the amount for MarkdownV2
         escaped_amount = escape_markdown_v2(f"{amount:,.2f}")
 
         reply_text_content = (
-            "Full Breakdown\\:\n\n"
+            "Full Breakdown\\\\.:\n\n"
             f"{daily_breakdown_string}\n\n"
-            f"Total Replies\\: *{replies}*\n"
-            f"Total Amount\\: *₦{escaped_amount}*"
+            f"Total Replies\\\\.: *{replies}*\n"
+            f"Total Amount\\\\.: *₦{escaped_amount}*"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Withdraw", callback_data="withdraw")],
@@ -805,7 +818,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if ref_balance is not None:
             context.user_data["is_affiliate_withdrawal"] = True
             escaped_balance = escape_markdown_v2(f"{ref_balance:.2f}")
-            reply_text_content = f"Enter the amount you'd like to withdraw \\(Balance: *${escaped_balance}*\\):"
+            reply_text_content = f"Enter the amount you'd like to withdraw \\\\(Balance: *${escaped_balance}*\\\\):"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="affiliate_balance")]]
             current_slide_key = "withdraw_affiliate_amount"
         else:
@@ -813,14 +826,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_total_amount = get_total_amount(user_id)
             context.user_data["reply_balance"] = user_total_amount
             escaped_balance = escape_markdown_v2(f"{user_total_amount:,.2f}")
-            reply_text_content = f"Enter the amount you'd like to withdraw \\(Min: ₦100\\) \n\\(Balance: *₦{escaped_balance}*\\):"
+            reply_text_content = f"Enter the amount you'd like to withdraw \\\\(Min: ₦100\\\\) \n\\\\(Balance: *₦{escaped_balance}*\\\\):"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="reply_guys_panel")]]
             current_slide_key = "withdraw_reply_amount"
 
     elif data in ("ghost_writers_plans", "kol_push_plans"):
         reply_text_content = (
             "This plan isn’t on the bot yet.\n"
-            "Please contact @ViralCore\\_Support for details."
+            "Please contact @ViralCore\\\\_Support for details."
         )
         reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="service_menu")]]
         current_slide_key = data
@@ -921,7 +934,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
              reply_text_content = (
                 "Telegram Automation\n\n"
                 "Get a personal bot that constantly monitors your channel for new posts and automatically submits them for raiding"
-                "\n\nAt $10 per month. Proceed to payment?"
+                "\n\nAt $10 per month\. Proceed to payment?"
             )
              reply_keyboard = [
                 [InlineKeyboardButton("Crypto", callback_data="payment_crypto"),
@@ -930,11 +943,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
              current_slide_key = "automated_plans_tg"
         elif plan_type_from_back == "direct_add":
+            escaped_price = escape_markdown_v2(f"${APIConfig.FOLLOWER_DETAILS['direct_add']['price_per_k']:.2f}")
             reply_text_content = (
-                f"Direct Add Followers:\n\n"
-                f"Price: ${APIConfig.FOLLOWER_DETAILS['direct_add']['price_per_k']:.2f} per 1k followers.\n"
-                f"Minimum: {APIConfig.FOLLOWER_DETAILS['direct_add']['min_qty']} followers.\n\n"
-                "Please select the number of followers you would like to purchase:"
+                f"Direct Add Followers\:\n\n"
+                f"Price\: {escaped_price} per 1k followers\.\n"
+                f"Minimum\: {APIConfig.FOLLOWER_DETAILS['direct_add']['min_qty']} followers\.\n\n"
+                "Please select the number of followers you would like to purchase\:"
             )
             reply_keyboard = [
                 [InlineKeyboardButton("1,000", callback_data="qty_direct_add_1000")],
@@ -946,11 +960,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             current_slide_key = "direct_add_qty_selection"
         elif plan_type_from_back == "slow_push":
+            escaped_price = escape_markdown_v2(f"${APIConfig.FOLLOWER_DETAILS['slow_push']['price_per_10']:.2f}")
             reply_text_content = (
-                f"Slow Push Followers:\n\n"
-                f"Price: ${APIConfig.FOLLOWER_DETAILS['slow_push']['price_per_10']:.2f} per 10 followers.\n"
-                f"Minimum: {APIConfig.FOLLOWER_DETAILS['slow_push']['min_qty']} followers (in multiples of 10).\n\n"
-                "Please select the number of followers you would like to purchase:"
+                f"Slow Push Followers\:\n\n"
+                f"Price\: {escaped_price} per 10 followers\.\n"
+                f"Minimum\: {APIConfig.FOLLOWER_DETAILS['slow_push']['min_qty']} followers \(in multiples of 10\)\.\n\n"
+                "Please select the number of followers you would like to purchase\:"
             )
             reply_keyboard = [
                 [InlineKeyboardButton("100", callback_data="qty_slow_push_100")],
@@ -1106,7 +1121,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                         logger.error(f"Withdrawal validation failed for user {user_id_requester}: {error_msg}")
                         # Notify admin of validation failure
                         validation_error_message = (
-                            f"❌ *WITHDRAWAL VALIDATION FAILED\\!*\n\n"
+                            f"❌ *WITHDRAWAL VALIDATION FAILED\\\\!*\n\n"
                             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
                             f"Error: {escape_markdown_v2(error_msg)}\n"
                             f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
@@ -1136,7 +1151,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                         logger.error(f"Failed to update {balance_type} balance for user {user_id_requester}")
                         # Notify admin of balance update failure
                         balance_error_message = (
-                            f"❌ *BALANCE UPDATE FAILED\\!*\n\n"
+                            f"❌ *BALANCE UPDATE FAILED\\\\!*\n\n"
                             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
                             f"Balance Type: {escape_markdown_v2(balance_type.title())}\n"
                             f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
@@ -1201,10 +1216,10 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                 edited_admin_message = (
                     f"✅ *WITHDRAWAL APPROVED & PROCESSED\!* ✅\n\n" # ##### MODIFICATION: Escaped '!'
                     f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-                    f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
+                    f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
                     f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*"
-                    f"{f' \\(~\\${withdrawal_amount_usd:,.2f}\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
+                    f"{f' \\\\(~\\${withdrawal_amount_usd:,.2f}\\\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
                     f"Bank Details:\n`{escaped_bank_details}`\n\n"
                     f"Request ID: `{request_id}`\n\n"
                     f"_Funds transferred successfully via Flutterwave\._"
@@ -1239,9 +1254,9 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                 
                 # Admin error message with technical details
                 error_message_admin = (
-                    f"❌ *FLUTTERWAVE TRANSFER FAILED for Request ID {request_id}\\!* ❌\n\n"
+                    f"❌ *FLUTTERWAVE TRANSFER FAILED for Request ID {request_id}\\\\!* ❌\n\n"
                     f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-                    f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
+                    f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                     f"Details:\n`{escaped_bank_details}`\n\n"
                     f"Error: {escape_markdown_v2(transfer_response.get('message', 'Unknown error'))}\n"
@@ -1271,7 +1286,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
             error_message_admin = (
                 f"❌ *ERROR PROCESSING WITHDRAWAL for Request ID {request_id}\!* ❌\n\n" # ##### MODIFICATION: Escaped '!'
                 f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-                f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
+                f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
                 f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                 f"Details:\n`{escaped_bank_details}`\n\n"
                 f"Error: {escape_markdown_v2(str(e))}\n\n" # ##### MODIFICATION: Escape error message
@@ -1317,10 +1332,10 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
         edited_admin_message = (
             f"❌ *WITHDRAWAL REJECTED\!* ❌\n\n" # ##### MODIFICATION: Escaped '!'
             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-            f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
+            f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
             f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
             f"Amount: *₦{int(withdrawal_amount_ngn)}*"
-            f"{f' \\(~\\${withdrawal_amount_usd:,.2f}\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
+            f"{f' \\\\(~\\${withdrawal_amount_usd:,.2f}\\\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
             f"Bank Details:\n`{escaped_bank_details}`\n\n"
             f"Request ID: `{request_id}`\n\n"
             f"_Request was rejected by an admin\._" # ##### MODIFICATION: Escaped '.'
@@ -1395,7 +1410,7 @@ async def handle_replies_approval(update: Update, context: ContextTypes.DEFAULT_
             # Notify user
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"🎉 Your replies *{num_replies} replies on {day_of_week}* has been approved and filled\\!\n\n"
+                text=f"🎉 Your replies *{num_replies} replies on {day_of_week}* has been approved and filled\\\\!\n\n"
                     "Check your balance for confirmation\\."
                 , parse_mode=ParseMode.MARKDOWN_V2
             )

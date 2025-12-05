@@ -16,21 +16,22 @@ from utils.payment_utils import get_deposit_address, convert_usd_to_crypto
 from handlers.payment_handler import PaymentHandler
 
 def test_bscscan_v2_api():
-    """Test BSCScan API V2 endpoints."""
-    print("🔍 Testing BSCScan API V2...")
+    """Test BSCScan API endpoints."""
+    print("🔍 Testing BSCScan API...")
     
     api_key = APIConfig.BSC_API_KEY
     deposit_address = get_deposit_address("bsc")
     
-    if not api_key or api_key == "your_bscscan_api_key":
+    if not api_key or api_key in ["your_bscscan_api_key", "your_bsc_api_key"]:
         print("❌ BSCScan API key not configured")
+        print("   Set BSC_API_KEY in .env (get one from https://bscscan.com/apis)")
         return False
     
     print(f"API Key: {api_key[:10]}...")
     print(f"Deposit Address: {deposit_address}")
     
-    # Test V2 API endpoints
-    base_url = "https://api.etherscan.io/v2/api?chainid=56"
+    # Use BSCScan API directly (free tier available)
+    base_url = "https://api.bscscan.com/api"
     
     tests = [
         {

@@ -26,6 +26,7 @@ class APIConfig:
     # Crypto data APIs
     CM_API_KEY: str = os.getenv("CM_API_KEY")
     BSC_API_KEY: str = os.getenv("BSC_API_KEY")
+    ETHERSCAN_API_KEY: str = os.getenv("ETHERSCAN_API_KEY")  # V2 unified API for BSC
     SOL_API_KEY: str = os.getenv("SOL_API_KEY")
     TRX_GRID_API_KEY: str = os.getenv("TRX_GRID_API_KEY")
     HELIUS_API_KEY: str = os.getenv("HELIUS_API_KEY")
