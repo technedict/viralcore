@@ -291,7 +291,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ... (existing affiliate, service_balance, support handlers - no changes needed) ...
 
     elif data == "service_menu":
-        reply_text_content = "Please select one of the service plan categories\\\\.:"
+        reply_text_content = "Please select one of the service plan categories\\:"
         reply_keyboard = [
             [InlineKeyboardButton("Twitter/X", callback_data="x_plans")],
             [InlineKeyboardButton("Telegram", callback_data="tg_plans")],
@@ -315,7 +315,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         reply_text_content = (
             f"🤝 *Affiliate Program*\n\n"
-            f"Share your referral link to earn commissions on new purchases\\\\!\n"
+            f"Share your referral link to earn commissions on new purchases\\!\n"
             f"Your referral link: `https://t\\.me/{escape_markdown_v2(context.bot.username)}?start=ref_{user_id}`\n\n"
             f"You have referred *{total_referrals}* users\\.\n"
             f"{referrer_msg}\n\n"
@@ -359,7 +359,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             f"💰 *My Balance & Engagements*\n\n"
             f"📊 *Posts Left:*\n"
-            f"🐦 X \\\\(Twitter\\\\): {total_x_posts} posts\n"
+            f"🐦 X \\(Twitter\\): {total_x_posts} posts\n"
             f"✈️ Telegram: {total_tg_posts} posts\n\n"
             f"💸 *Affiliate Balance:* ${escaped_balance}\n"
         )
@@ -383,7 +383,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "task_to_earn_menu":
         reply_text_content = (
             f"✅ *Task 2 Earn*\n\n"
-            f"This section is under development\\. Soon you'll be able to earn credits by completing simple tasks\\\\!"
+            f"This section is under development\\. Soon you'll be able to earn credits by completing simple tasks\\!"
         )
         reply_keyboard  = [
             # Add task-specific buttons here if needed later
@@ -399,9 +399,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_text_content = (
             f"ℹ️ *Support*\n\n"
             f"If you have any questions or encounter issues, please contact our support team:\n"
-            f"\\\\- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
-            f"\\\\- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
-            f"We are here to help you\\\\!"
+            f"\\- Telegram Channel: [Our Support Channel]({escape_markdown_v2(support_channel_link)})\n"
+            f"\\- Direct Admin: {escape_markdown_v2(support_admin_username)}\n\n"
+            f"We are here to help you\\!"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Join Support Channel", url=support_channel_link)],
@@ -643,7 +643,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "custom_order":
         reply_text_content = (
             "Please Contact Support to meet your requirements\:\n\n"
-            "@ViralCore\\\\_Support on Telegram\n"
+            "@ViralCore\\_Support on Telegram\n"
         )
         reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="main_menu")]]
         current_slide_key = "custom_order_contact"
@@ -783,17 +783,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = get_total_amount(user_id)
         daily_posts = get_user_daily_posts(user_id)
 
-        daily_breakdown_lines = [f"{day}\\\\.: {count} replies" for day, count in daily_posts]
+        daily_breakdown_lines = [f"{day}\\.: {count} replies" for day, count in daily_posts]
         daily_breakdown_string = "\n".join(daily_breakdown_lines)
         
         # Escape the amount for MarkdownV2
         escaped_amount = escape_markdown_v2(f"{amount:,.2f}")
 
         reply_text_content = (
-            "Full Breakdown\\\\.:\n\n"
+            "Full Breakdown\\.:\n\n"
             f"{daily_breakdown_string}\n\n"
-            f"Total Replies\\\\.: *{replies}*\n"
-            f"Total Amount\\\\.: *₦{escaped_amount}*"
+            f"Total Replies\\.: *{replies}*\n"
+            f"Total Amount\\.: *₦{escaped_amount}*"
         )
         reply_keyboard = [
             [InlineKeyboardButton("Withdraw", callback_data="withdraw")],
@@ -818,7 +818,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if ref_balance is not None:
             context.user_data["is_affiliate_withdrawal"] = True
             escaped_balance = escape_markdown_v2(f"{ref_balance:.2f}")
-            reply_text_content = f"Enter the amount you'd like to withdraw \\\\(Balance: *${escaped_balance}*\\\\):"
+            reply_text_content = f"Enter the amount you'd like to withdraw \\(Balance: *${escaped_balance}*\\):"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="affiliate_balance")]]
             current_slide_key = "withdraw_affiliate_amount"
         else:
@@ -826,14 +826,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_total_amount = get_total_amount(user_id)
             context.user_data["reply_balance"] = user_total_amount
             escaped_balance = escape_markdown_v2(f"{user_total_amount:,.2f}")
-            reply_text_content = f"Enter the amount you'd like to withdraw \\\\(Min: ₦100\\\\) \n\\\\(Balance: *₦{escaped_balance}*\\\\):"
+            reply_text_content = f"Enter the amount you'd like to withdraw \\(Min: ₦100\\) \n\\(Balance: *₦{escaped_balance}*\\):"
             reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="reply_guys_panel")]]
             current_slide_key = "withdraw_reply_amount"
 
     elif data in ("ghost_writers_plans", "kol_push_plans"):
         reply_text_content = (
             "This plan isn’t on the bot yet.\n"
-            "Please contact @ViralCore\\\\_Support for details."
+            "Please contact @ViralCore\\_Support for details."
         )
         reply_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="service_menu")]]
         current_slide_key = data
@@ -1121,7 +1121,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                         logger.error(f"Withdrawal validation failed for user {user_id_requester}: {error_msg}")
                         # Notify admin of validation failure
                         validation_error_message = (
-                            f"❌ *WITHDRAWAL VALIDATION FAILED\\\\!*\n\n"
+                            f"❌ *WITHDRAWAL VALIDATION FAILED\\!*\n\n"
                             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
                             f"Error: {escape_markdown_v2(error_msg)}\n"
                             f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
@@ -1151,7 +1151,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                         logger.error(f"Failed to update {balance_type} balance for user {user_id_requester}")
                         # Notify admin of balance update failure
                         balance_error_message = (
-                            f"❌ *BALANCE UPDATE FAILED\\\\!*\n\n"
+                            f"❌ *BALANCE UPDATE FAILED\\!*\n\n"
                             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})\n"
                             f"Balance Type: {escape_markdown_v2(balance_type.title())}\n"
                             f"Amount: *₦{int(withdrawal_amount_ngn)}*\n\n"
@@ -1216,10 +1216,10 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                 edited_admin_message = (
                     f"✅ *WITHDRAWAL APPROVED & PROCESSED\!* ✅\n\n" # ##### MODIFICATION: Escaped '!'
                     f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-                    f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
+                    f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
                     f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*"
-                    f"{f' \\\\(~\\${withdrawal_amount_usd:,.2f}\\\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
+                    f"{f' \\(~\\${withdrawal_amount_usd:,.2f}\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
                     f"Bank Details:\n`{escaped_bank_details}`\n\n"
                     f"Request ID: `{request_id}`\n\n"
                     f"_Funds transferred successfully via Flutterwave\._"
@@ -1254,9 +1254,9 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
                 
                 # Admin error message with technical details
                 error_message_admin = (
-                    f"❌ *FLUTTERWAVE TRANSFER FAILED for Request ID {request_id}\\\\!* ❌\n\n"
+                    f"❌ *FLUTTERWAVE TRANSFER FAILED for Request ID {request_id}\\!* ❌\n\n"
                     f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-                    f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
+                    f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
                     f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                     f"Details:\n`{escaped_bank_details}`\n\n"
                     f"Error: {escape_markdown_v2(transfer_response.get('message', 'Unknown error'))}\n"
@@ -1286,7 +1286,7 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
             error_message_admin = (
                 f"❌ *ERROR PROCESSING WITHDRAWAL for Request ID {request_id}\!* ❌\n\n" # ##### MODIFICATION: Escaped '!'
                 f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-                f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
+                f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
                 f"Amount: *₦{int(withdrawal_amount_ngn)}*\n"
                 f"Details:\n`{escaped_bank_details}`\n\n"
                 f"Error: {escape_markdown_v2(str(e))}\n\n" # ##### MODIFICATION: Escape error message
@@ -1332,10 +1332,10 @@ async def handle_withdrawal_approval(update: Update, context: ContextTypes.DEFAU
         edited_admin_message = (
             f"❌ *WITHDRAWAL REJECTED\!* ❌\n\n" # ##### MODIFICATION: Escaped '!'
             f"User: [{escaped_user_first_name}](tg://user?id={user_id_requester})"
-            f"{f' \\\\(@{escaped_user_username}\\\\)' if escaped_user_username else ''}\n"
+            f"{f' \\(@{escaped_user_username}\\)' if escaped_user_username else ''}\n"
             f"Withdrawal Type: {escape_markdown_v2('Affiliate' if is_affiliate_withdrawal else 'Standard')}\n"
             f"Amount: *₦{int(withdrawal_amount_ngn)}*"
-            f"{f' \\\\(~\\${withdrawal_amount_usd:,.2f}\\\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
+            f"{f' \\(~\\${withdrawal_amount_usd:,.2f}\\)' if is_affiliate_withdrawal else ''}\n\n" # ##### MODIFICATION: Escape '~' and '$'
             f"Bank Details:\n`{escaped_bank_details}`\n\n"
             f"Request ID: `{request_id}`\n\n"
             f"_Request was rejected by an admin\._" # ##### MODIFICATION: Escaped '.'
@@ -1410,7 +1410,7 @@ async def handle_replies_approval(update: Update, context: ContextTypes.DEFAULT_
             # Notify user
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"🎉 Your replies *{num_replies} replies on {day_of_week}* has been approved and filled\\\\!\n\n"
+                text=f"🎉 Your replies *{num_replies} replies on {day_of_week}* has been approved and filled\\!\n\n"
                     "Check your balance for confirmation\\."
                 , parse_mode=ParseMode.MARKDOWN_V2
             )
